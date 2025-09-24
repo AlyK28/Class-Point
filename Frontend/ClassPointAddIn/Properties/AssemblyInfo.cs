@@ -6,11 +6,11 @@ using System.Security;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("ClassPoint-Interface")]
+[assembly: AssemblyTitle("ClassPointAddIn")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("ClassPoint-Interface")]
+[assembly: AssemblyProduct("ClassPointAddIn")]
 [assembly: AssemblyCopyright("Copyright ©  2025")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -21,7 +21,7 @@ using System.Security;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("a0e8c1e8-2c13-46ac-a98a-86c6c2435933")]
+[assembly: Guid("8b0a6359-0552-4e86-8e74-71c380434146")]
 
 // Version information for an assembly consists of the following four values:
 //
