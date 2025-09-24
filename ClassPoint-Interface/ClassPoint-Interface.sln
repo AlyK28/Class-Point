@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35825.156 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClassPoint-Interface", "ClassPoint-Interface.csproj", "{77F7B7BB-CA01-47F5-89FA-C1F66BE23C68}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{77F7B7BB-CA01-47F5-89FA-C1F66BE23C68}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{77F7B7BB-CA01-47F5-89FA-C1F66BE23C68}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{77F7B7BB-CA01-47F5-89FA-C1F66BE23C68}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{77F7B7BB-CA01-47F5-89FA-C1F66BE23C68}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {ED575269-4B19-4DC1-A77D-A4C751D597D3}
+	EndGlobalSection
+EndGlobal
