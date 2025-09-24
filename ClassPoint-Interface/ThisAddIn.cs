@@ -1,12 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Xml.Linq;
-using PowerPoint = Microsoft.Office.Interop.PowerPoint;
-using Office = Microsoft.Office.Core;
-
-namespace ClassPoint_Interface
+﻿namespace ClassPoint_Interface
 {
     public partial class ThisAddIn
     {
@@ -29,7 +21,7 @@ namespace ClassPoint_Interface
             this.Startup += new System.EventHandler(ThisAddIn_Startup);
             this.Shutdown += new System.EventHandler(ThisAddIn_Shutdown);
         }
-        
-        #endregion
+
+        #endregion`
     }
 }
