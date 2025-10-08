@@ -18,3 +18,4 @@ services:
       - db
     environment:
       - DATABASE_URL=postgres://classpoint:secret@db:5432/classpoint
+
