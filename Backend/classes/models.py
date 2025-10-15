@@ -6,10 +6,9 @@ import random
 
 class Class(models.Model):
     """
-    Represents a class created when a slideshow starts.
+    Represents a live session created automatically when a slideshow starts.
+    Each Class belongs to a Course and a Teacher.
     """
-    name = models.CharField(max_length=100)
-    subject = models.CharField(max_length=100, blank=True, null=True)
     code = models.CharField(max_length=4, unique=True, editable=False)
     teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_classes')
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='classes')
@@ -36,4 +35,4 @@ class Class(models.Model):
 
     def __str__(self):
         status = "Active" if self.active else "Inactive"
-        return f"{self.name} ({self.code}) - {status}"
+        return f"{self.course.name} ({self.code}) - {status}"

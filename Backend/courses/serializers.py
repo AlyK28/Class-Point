@@ -4,4 +4,5 @@ from .models import Course
 class CourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
-        fields = '__all__'
+        fields = ['id', 'name', 'teacher', 'created_at']
+        read_only_fields = ['id', 'teacher', 'created_at']
