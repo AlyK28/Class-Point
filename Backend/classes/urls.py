@@ -1,6 +1,6 @@
 from django.urls import path
-from .views import ClassCreateView
+from .views import create_class_from_powerpoint
 
 urlpatterns = [
-    path('create/', ClassCreateView.as_view(), name='create_class'),
+    path('create-class-from-ppt/', create_class_from_powerpoint, name='create_class_from_ppt'),
 ]

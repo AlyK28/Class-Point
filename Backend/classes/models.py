@@ -1,16 +1,19 @@
 from django.db import models, transaction, IntegrityError
 from django.contrib.auth.models import User
+from courses.models import Course
 import random
+
 
 class Class(models.Model):
     """
-    Represents a class created by a teacher that students can join via a 4-digit code.
+    Represents a class created when a slideshow starts.
     """
     name = models.CharField(max_length=100)
     subject = models.CharField(max_length=100, blank=True, null=True)
     code = models.CharField(max_length=4, unique=True, editable=False)
     teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_classes')
-    active = models.BooleanField(default=True)  
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='classes')
+    active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):

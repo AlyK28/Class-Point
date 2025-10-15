@@ -46,6 +46,9 @@ INSTALLED_APPS = [
     'rest_framework',
     'users',
     'classes',
+    'courses',
+    'drf_spectacular',
+      'drf_spectacular_sidecar'
 ]
 
 
@@ -63,7 +66,8 @@ ROOT_URLCONF = 'classpoint_backend.urls'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
+    ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 TEMPLATES = [
