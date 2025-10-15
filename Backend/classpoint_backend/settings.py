@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'users',
     'classes',
     'courses',
+    'students',
     'drf_spectacular',
     'drf_spectacular_sidecar',
     'quizzes'
@@ -107,6 +108,24 @@ DATABASES = {
 # Override with DATABASE_URL if provided (useful for Docker and deployment)
 if 'DATABASE_URL' in os.environ:
     DATABASES['default'] = dj_database_url.config(conn_max_age=600)
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'ClassPoint API',
+    'DESCRIPTION': 'Backend API for ClassPoint Platform',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SCHEMA_PATH_PREFIX': '/api',
+    'TAGS_SORTER': 'alpha',
+    'OPERATIONS_SORTER': 'alpha',
+
+    # ✅ Must be a dict (even if empty)
+    'APPEND_COMPONENTS': {},
+
+    # ✅ Auto-group endpoints by their URL prefix (e.g. /api/courses/, /api/students/)
+    'DEFAULT_TAGS_FROM_PATH': True,
+   
+}
 
 
 # Password validation
