@@ -48,7 +48,8 @@ INSTALLED_APPS = [
     'classes',
     'courses',
     'drf_spectacular',
-      'drf_spectacular_sidecar'
+    'drf_spectacular_sidecar',
+    'quizzes'
 ]
 
 
