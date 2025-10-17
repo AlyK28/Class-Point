@@ -285,6 +285,18 @@ class DrawingAnswerSerializer(BaseStudentAnswerSerializer):
         
         # Store any additional metadata in answer_data
         data['answer_data'] = data.get('answer_data', {})
+        # Add NOT_IMPLEMENTED placeholders for drawing-specific features
+        data['answer_data'].update({
+            'drawing_strokes': 'NOT_IMPLEMENTED',
+            'drawing_colors': 'NOT_IMPLEMENTED',
+            'drawing_shapes': 'NOT_IMPLEMENTED',
+            'drawing_metadata': 'NOT_IMPLEMENTED',
+            'drawing_analysis': 'NOT_IMPLEMENTED',
+            'drawing_comparison': 'NOT_IMPLEMENTED',
+            'file_analysis': 'NOT_IMPLEMENTED',
+            'content_extraction': 'NOT_IMPLEMENTED',
+            'automatic_grading': 'NOT_IMPLEMENTED'
+        })
         return data
     
     def create(self, validated_data):
@@ -321,6 +333,17 @@ class ImageUploadAnswerSerializer(BaseStudentAnswerSerializer):
         
         # Store any additional metadata in answer_data
         data['answer_data'] = data.get('answer_data', {})
+        # Add NOT_IMPLEMENTED placeholders for image upload-specific features
+        data['answer_data'].update({
+            'image_metadata': 'NOT_IMPLEMENTED',
+            'image_analysis': 'NOT_IMPLEMENTED',
+            'ocr_text': 'NOT_IMPLEMENTED',
+            'object_detection': 'NOT_IMPLEMENTED',
+            'image_comparison': 'NOT_IMPLEMENTED',
+            'file_processing': 'NOT_IMPLEMENTED',
+            'content_analysis': 'NOT_IMPLEMENTED',
+            'automatic_grading': 'NOT_IMPLEMENTED'
+        })
         return data
     
     def create(self, validated_data):

@@ -125,7 +125,21 @@ class StudentAnswer(models.Model):
                 'canvas_width': props.get('canvas_width'),
                 'canvas_height': props.get('canvas_height'),
                 'max_file_size': props.get('max_file_size_mb'),
-                'allowed_formats': props.get('allowed_formats')
+                'allowed_formats': props.get('allowed_formats'),
+                'drawing_strokes': 'NOT_IMPLEMENTED',
+                'drawing_colors': 'NOT_IMPLEMENTED',
+                'drawing_shapes': 'NOT_IMPLEMENTED',
+                'drawing_metadata': 'NOT_IMPLEMENTED',
+                'drawing_analysis': 'NOT_IMPLEMENTED',
+                'drawing_comparison': 'NOT_IMPLEMENTED',
+                'image_metadata': 'NOT_IMPLEMENTED',
+                'image_analysis': 'NOT_IMPLEMENTED',
+                'ocr_text': 'NOT_IMPLEMENTED',
+                'object_detection': 'NOT_IMPLEMENTED',
+                'image_comparison': 'NOT_IMPLEMENTED',
+                'file_processing': 'NOT_IMPLEMENTED',
+                'content_analysis': 'NOT_IMPLEMENTED',
+                'automatic_grading': 'NOT_IMPLEMENTED'
             }
         
         return {'type': 'unknown'}
