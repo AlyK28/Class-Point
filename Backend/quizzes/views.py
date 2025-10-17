@@ -1,24 +1,10 @@
-from rest_framework import viewsets, permissions
-from .models import (
-    QuizType, Quiz,
-    MultipleChoiceOptions, WordCloudOptions,
-    ShortAnswerOptions, DrawingOptions, ImageUploadOptions
-)
-from .serializers import (
-    QuizTypeSerializer, QuizSerializer,
-    MultipleChoiceOptionsSerializer, WordCloudOptionsSerializer,
-    ShortAnswerOptionsSerializer, DrawingOptionsSerializer, ImageUploadOptionsSerializer
-)
-
-
-# -------- QUIZ TYPES --------
-class QuizTypeViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    Returns all available quiz types (e.g., Multiple Choice, Word Cloud, etc.)
-    """
-    queryset = QuizType.objects.filter(is_active=True)
-    serializer_class = QuizTypeSerializer
-    permission_classes = [permissions.IsAuthenticated]
+from rest_framework import viewsets, permissions, status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.db import transaction
+from .models import Quiz
+from .serializers import QuizSerializer
+from .constants import QuizTypeCodes
 
 
 # -------- QUIZZES --------
@@ -38,32 +24,74 @@ class QuizViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=self.request.user)
 
 
-# -------- TYPE-SPECIFIC OPTIONS --------
-class MultipleChoiceOptionsViewSet(viewsets.ModelViewSet):
-    queryset = MultipleChoiceOptions.objects.all()
-    serializer_class = MultipleChoiceOptionsSerializer
+# -------- CREATE ENDPOINTS PER TYPE (single call) --------
+class CreateShortAnswerQuizView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @transaction.atomic
+    def post(self, request):
+        """
+        Create a Short Answer quiz.
+        Expected body: { course, title, properties: { question_text, correct_answer, expected_keywords, case_sensitive, max_length, use_regex } }
+        """
+        course = request.data.get('course')
+        title = request.data.get('title')
+        properties = request.data.get('properties', {})
 
-class WordCloudOptionsViewSet(viewsets.ModelViewSet):
-    queryset = WordCloudOptions.objects.all()
-    serializer_class = WordCloudOptionsSerializer
+        serializer = QuizSerializer(data={
+            'course': course,
+            'title': title,
+            'quiz_type': QuizTypeCodes.SHORT_ANSWER,
+            'properties': properties
+        }, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        quiz = serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class CreateMultipleChoiceQuizView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @transaction.atomic
+    def post(self, request):
+        """
+        Create a Multiple Choice quiz.
+        Expected body: { course, title, properties: { question_text, choices[], allow_multiple_choices, number_of_choices, has_correct_answer, competition_mode, randomize_choice_order, points_per_correct, penalty_per_wrong } }
+        """
+        course = request.data.get('course')
+        title = request.data.get('title')
+        properties = request.data.get('properties', {})
 
-class ShortAnswerOptionsViewSet(viewsets.ModelViewSet):
-    queryset = ShortAnswerOptions.objects.all()
-    serializer_class = ShortAnswerOptionsSerializer
+        serializer = QuizSerializer(data={
+            'course': course,
+            'title': title,
+            'quiz_type': QuizTypeCodes.MULTIPLE_CHOICE,
+            'properties': properties
+        }, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        quiz = serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class CreateWordCloudQuizView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @transaction.atomic
+    def post(self, request):
+        """
+        Create a Word Cloud quiz.
+        Expected body: { course, title, properties: { question_text, max_words_per_student, allow_duplicates, normalize_case } }
+        """
+        course = request.data.get('course')
+        title = request.data.get('title')
+        properties = request.data.get('properties', {})
 
-class DrawingOptionsViewSet(viewsets.ModelViewSet):
-    queryset = DrawingOptions.objects.all()
-    serializer_class = DrawingOptionsSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-
-class ImageUploadOptionsViewSet(viewsets.ModelViewSet):
-    queryset = ImageUploadOptions.objects.all()
-    serializer_class = ImageUploadOptionsSerializer
-    permission_classes = [permissions.IsAuthenticated]
+        serializer = QuizSerializer(data={
+            'course': course,
+            'title': title,
+            'quiz_type': QuizTypeCodes.WORD_CLOUD,
+            'properties': properties
+        }, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        quiz = serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
