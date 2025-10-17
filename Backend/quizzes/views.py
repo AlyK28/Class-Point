@@ -6,6 +6,9 @@ from .models import Quiz
 from .serializers import QuizSerializer
 from .constants import QuizTypeCodes
 
+# ALAA_SAJA_TODO: Import uuid for generating multi_question_id for multi-quiz
+# Add: import uuid
+
 
 # -------- QUIZZES --------
 class QuizViewSet(viewsets.ModelViewSet):
@@ -95,3 +98,8 @@ class CreateWordCloudQuizView(APIView):
         serializer.is_valid(raise_exception=True)
         quiz = serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+# ALAA_SAJA_TODO: Add Multi-Quiz Views
+# Create new view classes for managing multi-quiz
+# do not forget about the permissions and the querysets :D 

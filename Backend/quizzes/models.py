@@ -1,4 +1,4 @@
-# quizzes/models.py
+
 from django.db import models
 from django.core.exceptions import ValidationError
 from courses.models import Course
@@ -23,6 +23,13 @@ class Quiz(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='created_quizzes')
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # ALAA_SAJA_TODO: Add multi-quiz support
+    # Add these two fields to group quizzes into multi-quiz exams:
+    # If multi_question_id is NULL, it's a standalone quiz (current behavior)
+    # If multi_question_id is set, it's part of a multi-quiz
+   
+   # order number to know the order of the quiz in the multi-quiz
+
     # --- GLOBAL OPTIONS (apply to all quiz types) ---
     start_with_slide = models.BooleanField(default=True)
     minimize_results_window_on_start = models.BooleanField(default=False)
@@ -39,6 +46,11 @@ class Quiz(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        # ALAA_SAJA_TODO: Add database constraints for multi-quiz
+        # Add constraints to ensure:
+        # 1. Questions in the same multi-quiz have unique order numbers
+        # 2. Proper ordering within multi-quiz
+
 
     def clean(self):
         """Validate quiz based on its type and properties."""
@@ -97,6 +109,16 @@ class Quiz(models.Model):
                 raise ValidationError("Max file size must be a positive integer")
             if not isinstance(allowed_formats, str) or not allowed_formats.strip():
                 raise ValidationError("Allowed formats must be a non-empty string")
+
+        # ALAA_SAJA_TODO: Add validation for multi-quiz
+        # Add validation logic to ensure:
+        # 1. If multi_question_id is set, question_order must be > 0
+        # 2. If multi_question_id is NULL, question_order should be 0
+        # 3. Validate that all questions in a multi-quiz belong to the same course
+        # 4. Validate that all questions in a multi-quiz are created by the same teacher
+        # 5. Validate that the course exists and user has permission to create quizzes in it
+        # Example: if self.multi_question_id and self.question_order == 0: raise ValidationError(...)
+        # Example: Check course ownership and teacher permissions
 
     def __str__(self):
         return f"{self.title} ({self.quiz_type})"

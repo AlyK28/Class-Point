@@ -3,6 +3,9 @@ from django.db import transaction
 from .models import Quiz
 from .constants import QuizTypeCodes
 
+# ALAA_SAJA_TODO: Import uuid for multi-quiz functionality
+# Add: import uuid
+
 
 class QuizSerializer(serializers.ModelSerializer):
     properties = serializers.DictField(required=True)
@@ -16,6 +19,8 @@ class QuizSerializer(serializers.ModelSerializer):
             'auto_close_after_seconds', 'show_timer',
             'allow_late_submissions', 'show_results_to_students',
             'properties'
+            # ALAA_SAJA_TODO: Add multi-quiz fields to serializer
+            # Add: 'multi_question_id', 'question_order'
         ]
         read_only_fields = ['created_by', 'created_at']
 
@@ -27,3 +32,7 @@ class QuizSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             quiz = Quiz.objects.create(**validated_data)
         return quiz
+
+
+# ALAA_SAJA_TODO: Add Multi-Quiz Serializers
+# Create new serializer classes for multi-quiz functionality:
