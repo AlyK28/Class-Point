@@ -93,18 +93,27 @@ WSGI_APPLICATION = 'classpoint_backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# Default to PostgreSQL configuration
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DATABASE_NAME', 'classpoint'),
-        'USER': os.getenv('DATABASE_USER', 'classpoint'),
-        'PASSWORD': os.getenv('DATABASE_PASSWORD', 'secret'),
-        'HOST': os.getenv('DATABASE_HOST', 'localhost'),
-        'PORT': os.getenv('DATABASE_PORT', '5432'),
+# Environment-based database configuration
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'local').lower()
+if ENVIRONMENT == 'production':
+    # Use PostgreSQL for production/staging
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DATABASE_NAME', 'classpoint'),
+            'USER': os.getenv('DATABASE_USER', 'classpoint'),
+            'PASSWORD': os.getenv('DATABASE_PASSWORD', 'secret'),
+            'HOST': os.getenv('DATABASE_HOST', 'localhost'),
+            'PORT': os.getenv('DATABASE_PORT', '5432'),
+        }
     }
-}
-
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 # Override with DATABASE_URL if provided (useful for Docker and deployment)
 if 'DATABASE_URL' in os.environ:
     DATABASES['default'] = dj_database_url.config(conn_max_age=600)
