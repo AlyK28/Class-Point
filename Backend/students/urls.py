@@ -5,7 +5,8 @@ from .views import (
     StudentClassEnrollmentViewSet,
     StudentQuizSubmissionViewSet,
     StudentAnswerViewSet,
-    JoinClassView
+    JoinClassView,
+    StudentQuizListView
 )
 
 router = DefaultRouter()
@@ -16,6 +17,10 @@ router.register('answers', StudentAnswerViewSet, basename='answer')
 
 urlpatterns = [
     path('join/', JoinClassView.as_view(), name='join-class'),
+    path('quizzes/', StudentQuizListView.as_view(), name='student-quiz-list'),
+    # Direct list/retrieve for students at /api/students/
+    path('', StudentViewSet.as_view({'get': 'list'}), name='student-list-root'),
+    path('<int:pk>/', StudentViewSet.as_view({'get': 'retrieve'}), name='student-detail-root'),
 ]
 
 urlpatterns += router.urls

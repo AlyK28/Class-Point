@@ -1,8 +1,9 @@
 from django.db import models, transaction, IntegrityError
 from django.contrib.auth.models import User
 from classes.models import Class
-from quizzes.models import Quiz, QuizType
+from quizzes.models import Quiz
 from django.core.exceptions import ValidationError
+from quizzes.helpers import QuizGradingHelper
 
 
 class Student(models.Model):
@@ -56,20 +57,78 @@ class StudentQuizSubmission(models.Model):
 class StudentAnswer(models.Model):
     """
     Stores an answer submitted by a student for a quiz.
+    Uses JSON field to store answer data for different quiz types.
     """
     submission = models.ForeignKey(StudentQuizSubmission, on_delete=models.CASCADE, related_name='answers')
-
-    # For text-based answers
-    answer_text = models.TextField(blank=True, null=True)
-
-    # For multiple-choice
-    selected_options = models.JSONField(blank=True, null=True, help_text="List of selected option IDs")
-
-    # For drawing/image upload
-    uploaded_image = models.ImageField(upload_to='student_uploads/', blank=True, null=True)
+    
+    # Flexible answer data stored as JSON
+    answer_data = models.JSONField(
+        default=dict,
+        help_text="Answer data structure varies by quiz type"
+    )
+    
+    # For file uploads (images, drawings) - stored separately for easier handling
+    uploaded_file = models.FileField(upload_to='student_uploads/', blank=True, null=True)
 
     # Auto metadata
     submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-submitted_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['submission'],
+                name='unique_answer_per_submission'
+            )
+        ]
+
+    def clean(self):
+        """Basic validation - detailed validation is handled by serializers."""
+        super().clean()
+        
+        # Basic validation only - detailed type-specific validation is in serializers
+        if not self.answer_data and not self.uploaded_file:
+            raise ValidationError("Answer must have either answer_data or uploaded_file.")
+
+    def get_correct_answer_info(self):
+        """Get the correct answer information for this quiz (for reference only)."""
+        quiz = self.submission.quiz
+        quiz_type_code = quiz.quiz_type
+        props = quiz.properties or {}
+        
+        if quiz_type_code == 'multiple_choice':
+            # Return correct choices for reference from properties
+            choices = props.get('choices', [])
+            correct_choices = [choice for choice in choices if choice.get('is_correct', False)]
+            return {
+                'type': 'multiple_choice',
+                'correct_choices': correct_choices,
+                'allow_multiple': bool(props.get('allow_multiple_choices', False))
+            }
+        elif quiz_type_code == 'short_answer':
+            # Return correct answer and keywords for reference from properties
+            return {
+                'type': 'short_answer',
+                'correct_answer': props.get('correct_answer'),
+                'expected_keywords': props.get('expected_keywords'),
+                'case_sensitive': bool(props.get('case_sensitive', False))
+            }
+        elif quiz_type_code == 'word_cloud':
+            return {
+                'type': 'word_cloud',
+                'max_words': props.get('max_words_per_student'),
+                'allow_duplicates': bool(props.get('allow_duplicates', False))
+            }
+        elif quiz_type_code in ['drawing', 'image_upload']:
+            return {
+                'type': quiz_type_code,
+                'canvas_width': props.get('canvas_width'),
+                'canvas_height': props.get('canvas_height'),
+                'max_file_size': props.get('max_file_size_mb'),
+                'allowed_formats': props.get('allowed_formats')
+            }
+        
+        return {'type': 'unknown'}
 
     def __str__(self):
         return f"Answer by {self.submission.student.full_name} for {self.submission.quiz.title}"
