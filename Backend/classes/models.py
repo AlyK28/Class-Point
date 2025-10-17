@@ -1,5 +1,6 @@
 from django.db import models, transaction, IntegrityError
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from courses.models import Course
 import random
 
@@ -15,7 +16,37 @@ class Class(models.Model):
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['teacher', 'course'],
+                condition=models.Q(active=True),
+                name='unique_active_class_per_teacher_course'
+            )
+        ]
+
+    def clean(self):
+        """Validate that teacher can't have more than one active class per course."""
+        super().clean()
+        
+        if self.active:
+            # Check if there's already an active class for this teacher and course
+            existing_active = Class.objects.filter(
+                teacher=self.teacher,
+                course=self.course,
+                active=True
+            ).exclude(pk=self.pk)  # Exclude current instance if updating
+            
+            if existing_active.exists():
+                raise ValidationError(
+                    f"Teacher {self.teacher.username} already has an active class for course {self.course.name}. "
+                    "Only one active class per course is allowed per teacher."
+                )
+
     def save(self, *args, **kwargs):
+        # Validate the model before saving
+        self.clean()
+        
         if not self.code:
             self.code = self.generate_unique_code()
 
