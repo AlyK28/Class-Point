@@ -16,11 +16,6 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
-
-from django.contrib import admin
-from django.urls import path, include
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 urlpatterns = [
     # Admin
@@ -31,10 +26,5 @@ urlpatterns = [
     path('api/classes/', include('classes.urls')),
     path('api/courses/', include('courses.urls')),
     path('api/quizzes/', include('quizzes.urls')),
-    path('api/students/', include('students.urls')),  # 👈 ADD THIS LINE
-
-    # API schema & documentation
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    path('api/students/', include('students.urls')),
 ]
