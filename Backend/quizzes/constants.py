@@ -8,6 +8,8 @@ class QuizTypeCodes:
     MULTIPLE_CHOICE = 'multiple_choice'
     SHORT_ANSWER = 'short_answer'
     WORD_CLOUD = 'word_cloud'
+    DRAWING = 'drawing'
+    IMAGE_UPLOAD = 'image_upload'
     # Deprecated types removed per new design
 
 # Quiz Type Names
@@ -15,6 +17,8 @@ class QuizTypeNames:
     MULTIPLE_CHOICE = 'Multiple Choice'
     SHORT_ANSWER = 'Short Answer'
     WORD_CLOUD = 'Word Cloud'
+    DRAWING = 'Drawing'
+    IMAGE_UPLOAD = 'Image Upload'
     # Deprecated types removed per new design
 
 # Validation Limits

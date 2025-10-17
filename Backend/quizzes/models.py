@@ -16,6 +16,8 @@ class Quiz(models.Model):
             (QuizTypeCodes.MULTIPLE_CHOICE, QuizTypeNames.MULTIPLE_CHOICE),
             (QuizTypeCodes.SHORT_ANSWER, QuizTypeNames.SHORT_ANSWER),
             (QuizTypeCodes.WORD_CLOUD, QuizTypeNames.WORD_CLOUD),
+            (QuizTypeCodes.DRAWING, QuizTypeNames.DRAWING),
+            (QuizTypeCodes.IMAGE_UPLOAD, QuizTypeNames.IMAGE_UPLOAD),
         ],
     )
     created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='created_quizzes')
@@ -45,7 +47,7 @@ class Quiz(models.Model):
 
         # Shared question_text rules where applicable
         question_text = props.get('question_text', '')
-        if self.quiz_type in [QuizTypeCodes.MULTIPLE_CHOICE, QuizTypeCodes.SHORT_ANSWER, QuizTypeCodes.WORD_CLOUD]:
+        if self.quiz_type in [QuizTypeCodes.MULTIPLE_CHOICE, QuizTypeCodes.SHORT_ANSWER, QuizTypeCodes.WORD_CLOUD, QuizTypeCodes.DRAWING, QuizTypeCodes.IMAGE_UPLOAD]:
             if not question_text or not str(question_text).strip():
                 raise ValidationError(ErrorMessages.QUESTION_TEXT_REQUIRED)
             if len(str(question_text)) > ValidationLimits.MAX_QUESTION_TEXT_LENGTH:
@@ -77,6 +79,24 @@ class Quiz(models.Model):
                 raise ValidationError(
                     f"Maximum words per student cannot exceed {ValidationLimits.MAX_WORDS_PER_STUDENT}"
                 )
+
+        elif self.quiz_type == QuizTypeCodes.DRAWING:
+            # Basic validation for drawing quiz properties
+            canvas_width = props.get('canvas_width', 800)
+            canvas_height = props.get('canvas_height', 600)
+            if not isinstance(canvas_width, int) or canvas_width <= 0:
+                raise ValidationError("Canvas width must be a positive integer")
+            if not isinstance(canvas_height, int) or canvas_height <= 0:
+                raise ValidationError("Canvas height must be a positive integer")
+
+        elif self.quiz_type == QuizTypeCodes.IMAGE_UPLOAD:
+            # Basic validation for image upload quiz properties
+            max_file_size = props.get('max_file_size_mb', 5)
+            allowed_formats = props.get('allowed_formats', 'jpg,png,jpeg')
+            if not isinstance(max_file_size, int) or max_file_size <= 0:
+                raise ValidationError("Max file size must be a positive integer")
+            if not isinstance(allowed_formats, str) or not allowed_formats.strip():
+                raise ValidationError("Allowed formats must be a non-empty string")
 
     def __str__(self):
         return f"{self.title} ({self.quiz_type})"
