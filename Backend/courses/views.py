@@ -9,3 +9,10 @@ class CourseViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(teacher=self.request.user)
+
+    def get_queryset(self):
+        """Return only courses owned by the authenticated teacher."""
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return Course.objects.none()
+        return Course.objects.filter(teacher=user).order_by('-created_at')
