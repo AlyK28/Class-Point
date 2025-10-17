@@ -142,6 +142,18 @@ class StudentAnswerViewSet(viewsets.ModelViewSet):
                 except Quiz.DoesNotExist:
                     pass
         
+        # ALAA_SAJA_TODO: Handle multi-quiz submissions
+        # Add logic to handle student answers for multi-quiz:
+        # - Check if quiz is part of a multi-quiz (multi_question_id is not null)
+        # - For multi-quiz, students can submit answers to individual questions
+        # - Each question in the multi-quiz is still a separate Quiz object
+        # - Student answers work the same way (one answer per quiz submission)
+        # - No changes needed to StudentAnswer model or serializers
+        # PERMISSIONS: Students can only submit answers to quizzes they have access to
+        # PERMISSIONS: Check if student is enrolled in the course
+        # PERMISSIONS: Validate that the quiz belongs to the student's enrolled course
+        # PERMISSIONS: Teachers can view all student submissions for their multi-quiz
+        
         # Default serializer for read operations or unknown quiz types
         return StudentAnswerSerializer
 
