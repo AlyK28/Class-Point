@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Commands</title>
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+</head>
+<body>
+    <script>
+        // The Office.js library is loaded in the head section
+        // Initialize Office.js
+        Office.onReady(() => {
+            console.log('Office.js ready for commands');
+        });
+
+        // Function to execute when the button is clicked
+        function executeFunction(event) {
+            // Your custom logic here
+            console.log('Execute function called');
+            
+            // Complete the function
+            event.completed();
+        }
+    </script>
+</body>
+</html>
