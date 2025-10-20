@@ -394,6 +394,7 @@
                     <div class="section">
                         <h2>📚 Manage Sessions</h2>
                         <button class="btn" onclick="createSession()">Create New Session</button>
+                        <div id="sessionsAlert"></div>
                         <div id="sessionsList"></div>
                     </div>
                 </div>
@@ -538,10 +539,10 @@
                     displaySessions();
                     updateStatsDropdown();
                 } else {
-                    showAlert('sessionsList', 'Failed to load sessions', 'error');
+                    showAlert('sessionsAlert', 'Failed to load sessions', 'error');
                 }
             } catch (error) {
-                showAlert('sessionsList', `Error loading sessions: ${error.message}`, 'error');
+                showAlert('sessionsAlert', `Error loading sessions: ${error.message}`, 'error');
             }
         }
 
@@ -592,14 +593,14 @@
                 });
 
                 if (response.ok) {
-                    showAlert('sessionsList', 'Session created successfully!', 'success');
+                    showAlert('sessionsAlert', 'Session created successfully!', 'success');
                     loadSessions();
                 } else {
                     const error = await response.json();
-                    showAlert('sessionsList', `Failed to create session: ${JSON.stringify(error)}`, 'error');
+                    showAlert('sessionsAlert', `Failed to create session: ${JSON.stringify(error)}`, 'error');
                 }
             } catch (error) {
-                showAlert('sessionsList', `Error creating session: ${error.message}`, 'error');
+                showAlert('sessionsAlert', `Error creating session: ${error.message}`, 'error');
             }
         }
 
@@ -615,25 +616,25 @@
                 });
 
                 if (response.ok) {
-                    showAlert('sessionsList', 'Session closed successfully!', 'success');
+                    showAlert('sessionsAlert', 'Session closed successfully!', 'success');
                     loadSessions();
                 } else {
-                    showAlert('sessionsList', 'Failed to close session', 'error');
+                    showAlert('sessionsAlert', 'Failed to close session', 'error');
                 }
             } catch (error) {
-                showAlert('sessionsList', `Error closing session: ${error.message}`, 'error');
+                showAlert('sessionsAlert', `Error closing session: ${error.message}`, 'error');
             }
         }
 
         function copySessionCode(code) {
             navigator.clipboard.writeText(code);
-            showAlert('sessionsList', `Session code ${code} copied to clipboard!`, 'success');
+            showAlert('sessionsAlert', `Session code ${code} copied to clipboard!`, 'success');
         }
 
         function copySessionUrl(code) {
             const url = `${window.location.origin}/upload/${code}/`;
             navigator.clipboard.writeText(url);
-            showAlert('sessionsList', 'Session URL copied to clipboard!', 'success');
+            showAlert('sessionsAlert', 'Session URL copied to clipboard!', 'success');
         }
 
         // File Upload
