@@ -1,458 +1,352 @@
-from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
+from rest_framework import generics, status, permissions
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.views import APIView
-from django.shortcuts import get_object_or_404, render
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.shortcuts import get_object_or_404
 from django.http import HttpResponse, Http404
+from django.contrib.auth.models import User
+from django.db.models import Q, Count, Avg
+from django.utils import timezone
 from django.core.files.storage import default_storage
-from django.conf import settings
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
 import zipfile
 import io
 import os
-from datetime import datetime
 
 from .models import ImageUploadSession, ImageSubmission, SessionSettings
 from .serializers import (
-    ImageUploadSessionSerializer, ImageSubmissionSerializer,
-    ImageSubmissionListSerializer, SessionSettingsSerializer,
-    SessionStatsSerializer, BulkDownloadSerializer
+    ImageUploadSessionSerializer, 
+    ImageSubmissionSerializer, 
+    ImageSubmissionListSerializer,
+    SessionSettingsSerializer,
+    SessionStatsSerializer,
+    BulkDownloadSerializer
 )
 
 
-class ImageUploadSessionViewSet(viewsets.ModelViewSet):
+class ImageUploadSessionListCreateView(generics.ListCreateAPIView):
     """
-    ViewSet for managing image upload sessions.
-    Teachers can create, view, and manage their sessions.
+    List all sessions for the authenticated teacher or create a new session.
     """
     serializer_class = ImageUploadSessionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        """Return sessions created by the current user."""
+        """Return sessions created by the authenticated teacher."""
         return ImageUploadSession.objects.filter(teacher=self.request.user)
 
     def perform_create(self, serializer):
-        """Set the teacher to the current user."""
+        """Create a new session with the current user as teacher."""
         serializer.save(teacher=self.request.user)
 
-    @action(detail=True, methods=['post'])
-    def close(self, request, pk=None):
-        """Close an active session."""
-        session = self.get_object()
-        if session.status == 'closed':
-            return Response(
-                {'error': 'Session is already closed.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        session.close_session()
-        
-        # Send WebSocket event
-        self.send_session_closed_event(session)
-        
-        return Response({'message': 'Session closed successfully.'})
 
-    @action(detail=True, methods=['get'])
-    def submissions(self, request, pk=None):
-        """Get all submissions for a session."""
-        session = self.get_object()
-        submissions = session.submissions.filter(deleted_at__isnull=True)
-        
-        # Apply filters
-        liked_only = request.query_params.get('liked', '').lower() == 'true'
-        if liked_only:
-            submissions = submissions.filter(is_liked=True)
-        
-        # Apply sorting
-        sort_by = request.query_params.get('sortBy', 'timestamp')
-        if sort_by == 'likes':
-            submissions = submissions.order_by('-likes', '-uploaded_at')
-        else:  # timestamp
-            submissions = submissions.order_by('-uploaded_at')
-        
-        # Pagination
-        limit = int(request.query_params.get('limit', 50))
-        offset = int(request.query_params.get('offset', 0))
-        submissions = submissions[offset:offset + limit]
-        
-        serializer = ImageSubmissionListSerializer(submissions, many=True)
-        return Response({
-            'submissions': serializer.data,
-            'total': session.submissions.filter(deleted_at__isnull=True).count(),
-            'hasMore': offset + limit < session.submissions.filter(deleted_at__isnull=True).count()
-        })
-
-    @action(detail=True, methods=['get'])
-    def stats(self, request, pk=None):
-        """Get session statistics."""
-        session = self.get_object()
-        submissions = session.submissions.filter(deleted_at__isnull=True)
-        
-        total_submissions = submissions.count()
-        total_likes = sum(sub.likes for sub in submissions)
-        liked_submissions = submissions.filter(is_liked=True).count()
-        
-        # Calculate average file size
-        file_sizes = [sub.file_size for sub in submissions if sub.file_size]
-        average_file_size = sum(file_sizes) / len(file_sizes) if file_sizes else 0
-        
-        # Most common format
-        formats = [sub.mime_type.split('/')[-1] for sub in submissions]
-        most_common_format = max(set(formats), key=formats.count) if formats else 'N/A'
-        
-        # Submissions by hour (simplified)
-        submissions_by_hour = {}
-        for sub in submissions:
-            hour = sub.uploaded_at.hour
-            submissions_by_hour[hour] = submissions_by_hour.get(hour, 0) + 1
-        
-        stats_data = {
-            'total_submissions': total_submissions,
-            'total_likes': total_likes,
-            'liked_submissions': liked_submissions,
-            'average_file_size': round(average_file_size, 2),
-            'most_common_format': most_common_format,
-            'submissions_by_hour': submissions_by_hour
-        }
-        
-        serializer = SessionStatsSerializer(stats_data)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['post'])
-    def download_all(self, request, pk=None):
-        """Download all submissions as a ZIP file."""
-        session = self.get_object()
-        submissions = session.submissions.filter(deleted_at__isnull=True)
-        
-        if not submissions.exists():
-            return Response(
-                {'error': 'No submissions to download.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Create ZIP file in memory
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            for submission in submissions:
-                if submission.image:
-                    try:
-                        # Read file from storage
-                        file_path = submission.image.path
-                        if os.path.exists(file_path):
-                            # Create filename with student name and timestamp
-                            student_name = submission.student_name or 'Anonymous'
-                            timestamp = submission.uploaded_at.strftime('%Y%m%d_%H%M%S')
-                            filename = f"{student_name}_{timestamp}_{submission.file_name}"
-                            
-                            zip_file.write(file_path, filename)
-                    except Exception as e:
-                        continue  # Skip files that can't be read
-        
-        zip_buffer.seek(0)
-        
-        # Return ZIP file
-        response = HttpResponse(
-            zip_buffer.getvalue(),
-            content_type='application/zip'
-        )
-        response['Content-Disposition'] = f'attachment; filename="{session.name}_submissions.zip"'
-        return response
-    
-    def send_session_closed_event(self, session):
-        """Send WebSocket event when a session is closed."""
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            async_to_sync(channel_layer.group_send)(
-                f'session_{session.session_code}',
-                {
-                    'type': 'session_closed',
-                    'session_id': str(session.id),
-                    'closed_at': session.closed_at.isoformat() if session.closed_at else None
-                }
-            )
-
-
-class ImageSubmissionViewSet(viewsets.ModelViewSet):
+class ImageUploadSessionDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    ViewSet for managing image submissions.
-    Students can upload images, teachers can manage submissions.
+    Retrieve, update or delete a specific session.
+    Only the session creator can perform these operations.
     """
-    serializer_class = ImageSubmissionSerializer
-    permission_classes = [permissions.AllowAny]  # Allow anonymous uploads
+    serializer_class = ImageUploadSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        """Return submissions based on user permissions."""
-        if self.request.user.is_authenticated:
-            # Teachers can see all submissions in their sessions
-            return ImageSubmission.objects.filter(
-                session__teacher=self.request.user,
-                deleted_at__isnull=True
-            )
-        else:
-            # Anonymous users can only see submissions for specific sessions
-            session_code = self.request.query_params.get('session_code')
-            if session_code:
-                return ImageSubmission.objects.filter(
-                    session__session_code=session_code,
-                    deleted_at__isnull=True
-                )
-            return ImageSubmission.objects.none()
+        """Return sessions created by the authenticated teacher."""
+        return ImageUploadSession.objects.filter(teacher=self.request.user)
 
-    def get_permissions(self):
-        """Set permissions based on action."""
-        if self.action in ['create']:
-            return [permissions.AllowAny()]  # Allow anonymous uploads
-        elif self.action in ['update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated()]  # Only teachers can modify
-        return super().get_permissions()
+    def perform_update(self, serializer):
+        """Update session, ensuring only the creator can modify it."""
+        session = self.get_object()
+        if session.teacher != self.request.user:
+            raise permissions.PermissionDenied("You can only modify your own sessions.")
+        serializer.save()
 
-    def perform_create(self, serializer):
-        """Create submission and update session count."""
-        session = serializer.validated_data['session']
+    def perform_destroy(self, instance):
+        """Delete session, ensuring only the creator can delete it."""
+        if instance.teacher != self.request.user:
+            raise permissions.PermissionDenied("You can only delete your own sessions.")
+        instance.delete()
+
+
+class ImageSubmissionListCreateView(generics.ListCreateAPIView):
+    """
+    List submissions for a specific session or create a new submission.
+    Teachers can see all submissions, students can only submit.
+    """
+    permission_classes = [permissions.AllowAny]  # Allow anonymous submissions
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return ImageSubmissionSerializer
+        return ImageSubmissionListSerializer
+
+    def get_queryset(self):
+        """Return submissions for the specified session."""
+        session_code = self.kwargs.get('session_code')
+        session = get_object_or_404(ImageUploadSession, session_code=session_code)
         
         # Check if session is active
         if not session.is_active():
-            raise serializers.ValidationError("This session is no longer accepting submissions.")
+            return ImageSubmission.objects.none()
+        
+        # Return non-deleted submissions
+        return ImageSubmission.objects.filter(
+            session=session,
+            deleted_at__isnull=True
+        )
+
+    def perform_create(self, serializer):
+        """Create a new submission for the specified session."""
+        session_code = self.kwargs.get('session_code')
+        session = get_object_or_404(ImageUploadSession, session_code=session_code)
+        
+        # Check if session is active
+        if not session.is_active():
+            raise permissions.PermissionDenied("This session is no longer active.")
         
         # Check submission limit
         if session.submission_count >= session.max_submissions:
-            raise serializers.ValidationError("Session has reached maximum submission limit.")
+            raise permissions.PermissionDenied("Maximum submissions reached for this session.")
         
-        # Save submission
-        submission = serializer.save()
+        # Create submission
+        submission = serializer.save(session=session)
         
         # Update session submission count
         session.submission_count += 1
         session.save()
-        
-        # Send WebSocket event
-        self.send_submission_created_event(submission)
-
-    @action(detail=True, methods=['post'])
-    def toggle_like(self, request, pk=None):
-        """Toggle like status for a submission."""
-        submission = self.get_object()
-        
-        # Check if user is the teacher who owns the session
-        if request.user != submission.session.teacher:
-            return Response(
-                {'error': 'Only the session owner can like submissions.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        submission.toggle_like()
-        
-        # Send WebSocket event
-        self.send_submission_liked_event(submission)
-        
-        serializer = self.get_serializer(submission)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['delete'])
-    def soft_delete(self, request, pk=None):
-        """Soft delete a submission."""
-        submission = self.get_object()
-        
-        # Check if user is the teacher who owns the session
-        if request.user != submission.session.teacher:
-            return Response(
-                {'error': 'Only the session owner can delete submissions.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        submission.soft_delete()
-        
-        # Send WebSocket event
-        self.send_submission_deleted_event(submission)
-        
-        return Response({'message': 'Submission deleted successfully.'})
-
-    @action(detail=True, methods=['get'])
-    def download(self, request, pk=None):
-        """Download the original image file."""
-        submission = self.get_object()
-        
-        if not submission.image:
-            raise Http404("Image file not found.")
-        
-        try:
-            # Read file from storage
-            file_path = submission.image.path
-            if os.path.exists(file_path):
-                with open(file_path, 'rb') as f:
-                    response = HttpResponse(f.read(), content_type=submission.mime_type)
-                    response['Content-Disposition'] = f'attachment; filename="{submission.file_name}"'
-                    return response
-            else:
-                raise Http404("Image file not found on disk.")
-        except Exception as e:
-            raise Http404("Error reading image file.")
-    
-    def send_submission_created_event(self, submission):
-        """Send WebSocket event when a new submission is created."""
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            async_to_sync(channel_layer.group_send)(
-                f'session_{submission.session.session_code}',
-                {
-                    'type': 'submission_created',
-                    'submission': {
-                        'id': str(submission.id),
-                        'session_id': str(submission.session.id),
-                        'student_name': submission.student_name,
-                        'image_url': submission.get_image_url(),
-                        'thumbnail_url': submission.get_thumbnail_url(),
-                        'uploaded_at': submission.uploaded_at.isoformat()
-                    }
-                }
-            )
-    
-    def send_submission_liked_event(self, submission):
-        """Send WebSocket event when a submission is liked/unliked."""
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            async_to_sync(channel_layer.group_send)(
-                f'session_{submission.session.session_code}',
-                {
-                    'type': 'submission_liked',
-                    'submission_id': str(submission.id),
-                    'likes': submission.likes,
-                    'is_liked': submission.is_liked
-                }
-            )
-    
-    def send_submission_deleted_event(self, submission):
-        """Send WebSocket event when a submission is deleted."""
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            async_to_sync(channel_layer.group_send)(
-                f'session_{submission.session.session_code}',
-                {
-                    'type': 'submission_deleted',
-                    'submission_id': str(submission.id)
-                }
-            )
 
 
-class PublicSessionView(APIView):
+class ImageSubmissionDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    Public view for students to access session information and upload images.
-    No authentication required.
+    Retrieve, update or delete a specific submission.
+    Only the session creator can perform these operations.
     """
-    permission_classes = [permissions.AllowAny]
+    serializer_class = ImageSubmissionSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request, session_code):
-        """Get session information for students."""
-        try:
-            session = ImageUploadSession.objects.get(
-                session_code=session_code,
-                status='active'
-            )
-        except ImageUploadSession.DoesNotExist:
-            return Response(
-                {'error': 'Session not found or inactive.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Return session info for students
-        return Response({
-            'session_code': session.session_code,
-            'name': session.name,
-            'question': session.question,
-            'submission_count': session.submission_count,
-            'max_submissions': session.max_submissions,
-            'allow_anonymous': session.allow_anonymous
-        })
+    def get_queryset(self):
+        """Return submissions for sessions created by the authenticated teacher."""
+        return ImageSubmission.objects.filter(
+            session__teacher=self.request.user,
+            deleted_at__isnull=True
+        )
 
-    def post(self, request, session_code):
-        """Upload an image to the session."""
-        try:
-            session = ImageUploadSession.objects.get(
-                session_code=session_code,
-                status='active'
-            )
-        except ImageUploadSession.DoesNotExist:
-            return Response(
-                {'error': 'Session not found or inactive.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Check submission limit
-        if session.submission_count >= session.max_submissions:
-            return Response(
-                {'error': 'Session has reached maximum submission limit.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Create submission
-        serializer = ImageSubmissionSerializer(data=request.data)
-        if serializer.is_valid():
-            # Add session to validated data
-            serializer.validated_data['session'] = session
-            submission = serializer.save()
-            
-            # Update session count
-            session.submission_count += 1
-            session.save()
-            
-            return Response(
-                {
-                    'success': True,
-                    'submission_id': submission.id,
-                    'image_url': submission.get_image_url(),
-                    'thumbnail_url': submission.get_thumbnail_url(),
-                    'uploaded_at': submission.uploaded_at
-                },
-                status=status.HTTP_201_CREATED
-            )
-        
+    def perform_update(self, serializer):
+        """Update submission, ensuring only the session creator can modify it."""
+        submission = self.get_object()
+        if submission.session.teacher != self.request.user:
+            raise permissions.PermissionDenied("You can only modify submissions in your own sessions.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """Soft delete submission."""
+        if instance.session.teacher != self.request.user:
+            raise permissions.PermissionDenied("You can only delete submissions in your own sessions.")
+        instance.soft_delete()
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def session_stats(request, session_id):
+    """
+    Get statistics for a specific session.
+    Only the session creator can access this.
+    """
+    session = get_object_or_404(ImageUploadSession, id=session_id, teacher=request.user)
+    
+    submissions = ImageSubmission.objects.filter(session=session, deleted_at__isnull=True)
+    
+    # Calculate statistics
+    total_submissions = submissions.count()
+    total_likes = submissions.aggregate(total=Count('likes'))['total'] or 0
+    liked_submissions = submissions.filter(is_liked=True).count()
+    average_file_size = submissions.aggregate(avg=Avg('file_size'))['avg'] or 0
+    
+    # Most common format
+    format_counts = submissions.values('mime_type').annotate(count=Count('id')).order_by('-count')
+    most_common_format = format_counts.first()['mime_type'] if format_counts else 'N/A'
+    
+    # Submissions by hour (last 24 hours)
+    from django.db.models.functions import TruncHour
+    from django.utils import timezone
+    now = timezone.now()
+    yesterday = now - timezone.timedelta(hours=24)
+    
+    submissions_by_hour = submissions.filter(
+        uploaded_at__gte=yesterday
+    ).annotate(
+        hour=TruncHour('uploaded_at')
+    ).values('hour').annotate(count=Count('id')).order_by('hour')
+    
+    stats_data = {
+        'total_submissions': total_submissions,
+        'total_likes': total_likes,
+        'liked_submissions': liked_submissions,
+        'average_file_size': round(average_file_size, 2),
+        'most_common_format': most_common_format,
+        'submissions_by_hour': {str(item['hour']): item['count'] for item in submissions_by_hour}
+    }
+    
+    serializer = SessionStatsSerializer(stats_data)
+    return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def toggle_like(request, submission_id):
+    """
+    Toggle like status for a submission.
+    Only the session creator can like/unlike submissions.
+    """
+    submission = get_object_or_404(
+        ImageSubmission, 
+        id=submission_id, 
+        session__teacher=request.user,
+        deleted_at__isnull=True
+    )
+    
+    submission.toggle_like()
+    serializer = ImageSubmissionSerializer(submission)
+    return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def bulk_download(request, session_id):
+    """
+    Download multiple submissions as a ZIP file.
+    Only the session creator can download submissions.
+    """
+    session = get_object_or_404(ImageUploadSession, id=session_id, teacher=request.user)
+    
+    serializer = BulkDownloadSerializer(data=request.data)
+    if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    submission_ids = serializer.validated_data.get('submission_ids', [])
+    include_metadata = serializer.validated_data.get('include_metadata', True)
+    zip_filename = serializer.validated_data.get('zip_filename', f'session_{session.session_code}_submissions.zip')
+    
+    # Get submissions
+    if submission_ids:
+        submissions = ImageSubmission.objects.filter(
+            id__in=submission_ids,
+            session=session,
+            deleted_at__isnull=True
+        )
+    else:
+        submissions = ImageSubmission.objects.filter(
+            session=session,
+            deleted_at__isnull=True
+        )
+    
+    if not submissions.exists():
+        return Response(
+            {'error': 'No submissions found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Create ZIP file
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for submission in submissions:
+            if submission.image and default_storage.exists(submission.image.name):
+                # Add image file
+                image_path = default_storage.path(submission.image.name)
+                zip_file.write(
+                    image_path, 
+                    f"{submission.student_name or 'anonymous'}_{submission.id}_{submission.file_name}"
+                )
+                
+                # Add metadata if requested
+                if include_metadata:
+                    metadata = {
+                        'submission_id': str(submission.id),
+                        'student_name': submission.student_name or 'Anonymous',
+                        'file_name': submission.file_name,
+                        'file_size': submission.file_size,
+                        'mime_type': submission.mime_type,
+                        'uploaded_at': submission.uploaded_at.isoformat(),
+                        'likes': submission.likes,
+                        'is_liked': submission.is_liked,
+                        'metadata': submission.metadata
+                    }
+                    
+                    metadata_content = '\n'.join([f"{k}: {v}" for k, v in metadata.items()])
+                    zip_file.writestr(
+                        f"{submission.student_name or 'anonymous'}_{submission.id}_metadata.txt",
+                        metadata_content
+                    )
+    
+    zip_buffer.seek(0)
+    
+    response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
+    return response
 
 
-class SessionSettingsViewSet(viewsets.ModelViewSet):
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def public_session_view(request, session_code):
     """
-    ViewSet for managing teacher session settings.
+    Public view for students to access a session and submit images.
+    This endpoint doesn't require authentication.
+    """
+    session = get_object_or_404(ImageUploadSession, session_code=session_code)
+    
+    if not session.is_active():
+        return Response(
+            {'error': 'This session is no longer active'}, 
+            status=status.HTTP_410_GONE
+        )
+    
+    # Return session info for the public interface
+    serializer = ImageUploadSessionSerializer(session)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def teacher_sessions(request):
+    """
+    Get all sessions for the authenticated teacher with basic stats.
+    """
+    sessions = ImageUploadSession.objects.filter(teacher=request.user).annotate(
+        actual_submission_count=Count('submissions', filter=Q(submissions__deleted_at__isnull=True))
+    )
+    
+    serializer = ImageUploadSessionSerializer(sessions, many=True)
+    return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def close_session(request, session_id):
+    """
+    Close an active session.
+    Only the session creator can close it.
+    """
+    session = get_object_or_404(ImageUploadSession, id=session_id, teacher=request.user)
+    
+    if not session.is_active():
+        return Response(
+            {'error': 'Session is already closed'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    session.close_session()
+    serializer = ImageUploadSessionSerializer(session)
+    return Response(serializer.data)
+
+
+class SessionSettingsView(generics.RetrieveUpdateAPIView):
+    """
+    Retrieve or update teacher's session settings.
     """
     serializer_class = SessionSettingsSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        """Return settings for the current user."""
-        return SessionSettings.objects.filter(teacher=self.request.user)
-
-    def perform_create(self, serializer):
-        """Set the teacher to the current user."""
-        serializer.save(teacher=self.request.user)
-
     def get_object(self):
         """Get or create settings for the current user."""
-        settings_obj, created = SessionSettings.objects.get_or_create(
+        settings, created = SessionSettings.objects.get_or_create(
             teacher=self.request.user
         )
-        return settings_obj
-
-
-class StudentUploadView(APIView):
-    """
-    View to serve the student upload interface.
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request, session_code):
-        """Serve the student upload page."""
-        try:
-            session = ImageUploadSession.objects.get(
-                session_code=session_code,
-                status='active'
-            )
-        except ImageUploadSession.DoesNotExist:
-            return render(request, 'image_upload/error.html', {
-                'error': 'Session not found or inactive.',
-                'session_code': session_code
-            })
-        
-        return render(request, 'image_upload/student_upload.html', {
-            'session': session
-        })
+        return settings

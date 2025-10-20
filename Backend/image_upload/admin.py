@@ -66,3 +66,4 @@ class SessionSettingsAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+

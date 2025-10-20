@@ -194,3 +194,4 @@ class BulkDownloadSerializer(serializers.Serializer):
     )
     include_metadata = serializers.BooleanField(default=True)
     zip_filename = serializers.CharField(max_length=255, required=False)
+

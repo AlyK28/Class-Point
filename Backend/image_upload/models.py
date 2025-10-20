@@ -192,3 +192,4 @@ class SessionSettings(models.Model):
     def get_max_file_size_bytes(self):
         """Get max file size in bytes."""
         return self.max_file_size_mb * 1024 * 1024
+
