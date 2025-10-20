@@ -173,10 +173,52 @@
             transform: translateY(-5px);
         }
 
+        .submission-image-container {
+            position: relative;
+        }
+
         .submission-image {
             width: 100%;
             height: 200px;
             object-fit: cover;
+        }
+
+        .submission-overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 5px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .submission-card:hover .submission-overlay {
+            opacity: 1;
+        }
+
+        .star-btn, .delete-btn {
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .star-btn:hover {
+            background: #ffd700;
+            transform: scale(1.1);
+        }
+
+        .delete-btn:hover {
+            background: #ff4757;
+            transform: scale(1.1);
         }
 
         .submission-info {
@@ -387,6 +429,13 @@
                             <label for="viewSessionCode">Session Code:</label>
                             <input type="text" id="viewSessionCode" placeholder="Enter session code">
                             <button class="btn btn-secondary" onclick="loadSubmissions()">Load Submissions</button>
+                        </div>
+                        <div class="form-group">
+                            <label for="searchSubmissions">Search by name or caption:</label>
+                            <input type="text" id="searchSubmissions" placeholder="Search submissions..." onkeyup="filterSubmissions()">
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-secondary" onclick="downloadAllSubmissions()">📥 Download All as ZIP</button>
                         </div>
                         <div id="submissionsList"></div>
                     </div>
@@ -646,6 +695,12 @@
             }
 
             showAlert('uploadAlert', 'Uploading image...', 'info');
+            
+            // Validate session code format (should be 6 characters)
+            if (sessionCode.length !== 6) {
+                showAlert('uploadAlert', 'Session code must be 6 characters long', 'error');
+                return;
+            }
 
             const formData = new FormData();
             formData.append('image', selectedFile);
@@ -674,7 +729,8 @@
                     displaySelectedFile();
                 } else {
                     const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
-                    showAlert('uploadAlert', `Upload failed: ${error.detail}`, 'error');
+                    console.error('Upload error response:', response.status, error);
+                    showAlert('uploadAlert', `Upload failed: ${error.detail || error.message || JSON.stringify(error)}`, 'error');
                 }
             } catch (error) {
                 console.error('Upload error:', error);
@@ -717,14 +773,27 @@
             submissionsList.innerHTML = `
                 <div class="submissions-grid">
                     ${submissions.map(submission => `
-                        <div class="submission-card">
-                            <img src="http://localhost:8000${submission.image_url}" alt="Submission" class="submission-image" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBmb3VuZDwvdGV4dD48L3N2Zz4='">
+                        <div class="submission-card" onclick="viewSubmission('${submission.id}')">
+                            <div class="submission-image-container">
+                                <img src="http://localhost:8000${submission.image_url}" alt="Submission" class="submission-image" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBmb3VuZDwvdGV4dD48L3N2Zz4='">
+                                <div class="submission-overlay">
+                                    <button class="star-btn" onclick="event.stopPropagation(); toggleStar('${submission.id}')" title="Give star">
+                                        ⭐
+                                    </button>
+                                    <button class="delete-btn" onclick="event.stopPropagation(); deleteSubmission('${submission.id}')" title="Delete">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </div>
                             <div class="submission-info">
                                 <div class="submission-name">${submission.student_name || 'Anonymous'}</div>
-                                <div class="submission-time">${new Date(submission.uploaded_at).toLocaleString()}</div>
-                                <button class="like-btn ${submission.is_liked ? 'liked' : ''}" onclick="toggleLike('${submission.id}')">
-                                    ❤️ ${submission.likes}
-                                </button>
+                                <div class="submission-time">${new Date(submission.uploaded_at).toLocaleTimeString()}</div>
+                                <div class="submission-stats">
+                                    <button class="like-btn ${submission.is_liked ? 'liked' : ''}" onclick="event.stopPropagation(); toggleLike('${submission.id}')">
+                                        ❤️ ${submission.likes}
+                                    </button>
+                                    <span class="stars">⭐ 0</span>
+                                </div>
                             </div>
                         </div>
                     `).join('')}
@@ -753,6 +822,145 @@
                 }
             } catch (error) {
                 showAlert('submissionsList', `Error toggling like: ${error.message}`, 'error');
+            }
+        }
+
+        async function toggleStar(submissionId) {
+            if (!authToken) {
+                showAlert('submissionsList', 'Please login to give stars', 'error');
+                return;
+            }
+
+            try {
+                // For now, just show a success message
+                // In a real implementation, this would call a star API endpoint
+                showAlert('submissionsList', '⭐ Star given!', 'success');
+                
+                // Update the star count in the UI
+                const starElement = document.querySelector(`[onclick*="${submissionId}"]`).closest('.submission-card').querySelector('.stars');
+                const currentStars = parseInt(starElement.textContent.match(/\d+/)[0]) || 0;
+                starElement.textContent = `⭐ ${currentStars + 1}`;
+            } catch (error) {
+                console.error('Star error:', error);
+                showAlert('submissionsList', `Star error: ${error.message}`, 'error');
+            }
+        }
+
+        async function deleteSubmission(submissionId) {
+            if (!authToken) {
+                showAlert('submissionsList', 'Please login to delete submissions', 'error');
+                return;
+            }
+
+            if (!confirm('Are you sure you want to delete this submission?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/image-upload/submissions/${submissionId}/delete/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    mode: 'cors',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    showAlert('submissionsList', 'Submission deleted successfully', 'success');
+                    loadSubmissions(); // Reload to show updated list
+                } else {
+                    showAlert('submissionsList', 'Failed to delete submission', 'error');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                showAlert('submissionsList', `Delete error: ${error.message}`, 'error');
+            }
+        }
+
+        function viewSubmission(submissionId) {
+            // Open submission in a modal or new window
+            // For now, just show an alert
+            showAlert('submissionsList', `Viewing submission ${submissionId}`, 'info');
+        }
+
+        function filterSubmissions() {
+            const searchTerm = document.getElementById('searchSubmissions').value.toLowerCase();
+            const submissionCards = document.querySelectorAll('.submission-card');
+            
+            submissionCards.forEach(card => {
+                const name = card.querySelector('.submission-name').textContent.toLowerCase();
+                const caption = card.querySelector('.submission-time').textContent.toLowerCase();
+                
+                if (name.includes(searchTerm) || caption.includes(searchTerm)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        async function downloadAllSubmissions() {
+            const sessionCode = document.getElementById('viewSessionCode').value;
+            if (!sessionCode) {
+                showAlert('submissionsList', 'Please enter a session code first', 'error');
+                return;
+            }
+
+            if (!authToken) {
+                showAlert('submissionsList', 'Please login to download submissions', 'error');
+                return;
+            }
+
+            try {
+                showAlert('submissionsList', 'Preparing download...', 'info');
+                
+                // First, get the session ID
+                const sessionResponse = await fetch(`${API_BASE}/image-upload/public/session/${sessionCode}/`);
+                if (!sessionResponse.ok) {
+                    showAlert('submissionsList', 'Session not found', 'error');
+                    return;
+                }
+                
+                const sessionData = await sessionResponse.json();
+                const sessionId = sessionData.id;
+                
+                // Request bulk download
+                const downloadResponse = await fetch(`${API_BASE}/image-upload/sessions/${sessionId}/download/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        include_metadata: true,
+                        zip_filename: `session_${sessionCode}_submissions.zip`
+                    }),
+                    mode: 'cors',
+                    credentials: 'include'
+                });
+
+                if (downloadResponse.ok) {
+                    // Create download link
+                    const blob = await downloadResponse.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `session_${sessionCode}_submissions.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    showAlert('submissionsList', 'Download started!', 'success');
+                } else {
+                    const error = await downloadResponse.json().catch(() => ({ detail: 'Download failed' }));
+                    showAlert('submissionsList', `Download failed: ${error.detail}`, 'error');
+                }
+            } catch (error) {
+                console.error('Download error:', error);
+                showAlert('submissionsList', `Download error: ${error.message}`, 'error');
             }
         }
 

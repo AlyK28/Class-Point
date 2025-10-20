@@ -75,7 +75,7 @@ class ImageSubmissionSerializer(serializers.ModelSerializer):
             'uploaded_at', 'deleted_at'
         ]
         read_only_fields = [
-            'id', 'file_name', 'file_size', 'mime_type', 'likes', 'is_liked',
+            'id', 'session', 'file_name', 'file_size', 'mime_type', 'likes', 'is_liked',
             'metadata', 'uploaded_at', 'deleted_at', 'thumbnail'
         ]
 
@@ -123,7 +123,24 @@ class ImageSubmissionSerializer(serializers.ModelSerializer):
             except Exception:
                 validated_data['metadata'] = {}
         
-        return super().create(validated_data)
+        # Create the submission
+        submission = super().create(validated_data)
+        
+        # Generate thumbnail after creation
+        if image:
+            try:
+                from .models import generate_thumbnail
+                thumbnail = generate_thumbnail(image)
+                if thumbnail:
+                    submission.thumbnail.save(
+                        f"thumb_{image.name}",
+                        thumbnail,
+                        save=True
+                    )
+            except Exception as e:
+                print(f"Thumbnail generation failed: {e}")
+        
+        return submission
 
 
 class ImageSubmissionListSerializer(serializers.ModelSerializer):
