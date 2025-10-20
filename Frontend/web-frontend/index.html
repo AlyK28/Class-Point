@@ -837,9 +837,17 @@
                 showAlert('submissionsList', '⭐ Star given!', 'success');
                 
                 // Update the star count in the UI
-                const starElement = document.querySelector(`[onclick*="${submissionId}"]`).closest('.submission-card').querySelector('.stars');
-                const currentStars = parseInt(starElement.textContent.match(/\d+/)[0]) || 0;
-                starElement.textContent = `⭐ ${currentStars + 1}`;
+                const starButton = document.querySelector(`[onclick*="toggleStar('${submissionId}')"]`);
+                if (starButton) {
+                    const submissionCard = starButton.closest('.submission-card');
+                    if (submissionCard) {
+                        const starElement = submissionCard.querySelector('.stars');
+                        if (starElement) {
+                            const currentStars = parseInt(starElement.textContent.match(/\d+/)?.[0]) || 0;
+                            starElement.textContent = `⭐ ${currentStars + 1}`;
+                        }
+                    }
+                }
             } catch (error) {
                 console.error('Star error:', error);
                 showAlert('submissionsList', `Star error: ${error.message}`, 'error');

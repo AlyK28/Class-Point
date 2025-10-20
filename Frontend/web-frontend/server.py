@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 # Configuration
-PORT = 3000
+PORT = 3001
 HOST = 'localhost'
 
 class CustomHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
