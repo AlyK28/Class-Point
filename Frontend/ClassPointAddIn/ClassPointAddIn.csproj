@@ -217,6 +217,7 @@
     <Compile Include="Api\Services\UserService\Responses\RegisterResponse.cs" />
     <Compile Include="Api\Services\UserService\Interfaces\IUserApiService.cs" />
     <Compile Include="Api\Services\UserService\UserApiService.cs" />
+    <Compile Include="Class\ClassApiService.cs" />
     <Compile Include="Constants\RibbonConstants.cs" />
     <Compile Include="Course\Service\CourseService.cs" />
     <Compile Include="Users\Auth\AuthenticationService.cs" />
@@ -225,6 +226,12 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Users\ValueObjects\JWTToken.cs" />
+    <Compile Include="Views\ClassCodeDisplayForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Views\ClassCodeDisplayForm.Designer.cs">
+      <DependentUpon>ClassCodeDisplayForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="Views\DynamicRibbon.cs" />
     <Compile Include="Views\LoginForm .cs">
       <SubType>Form</SubType>

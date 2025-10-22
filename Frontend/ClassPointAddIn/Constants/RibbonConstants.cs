@@ -9,8 +9,10 @@
 
         public const string GroupConnect = "grpConnect";
         public const string GroupTeacher = "grpTeacher";
+        public const string GroupPresentation = "grpPresentation";
 
         public const string ButtonConnect = "btnConnect";
         public const string ButtonLogout = "btnLogout";
+        public const string ButtonStartSlideshow = "btnStartSlideshow";
     }
 }
