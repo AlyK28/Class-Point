@@ -7,7 +7,7 @@
 					<button id="btnConnect"
 							label="Connect"
 							size="large"
-							imageMso="HappyFace"
+							imageMso="FileNew"
 							onAction="OnConnectClick"/>
 				</group>
 			</tab>
@@ -17,20 +17,27 @@
 					<button id="btnLogout"
 							label="Logout"
 							size="large"
-							imageMso="Logoff"
+							imageMso="FileClose"
 							onAction="OnLogoutClick"/>
 				</group>
 				<group id="grpPresentation" label="Presentation">
 					<button id="btnStartSlideshow"
 							label="Start Slideshow"
 							size="large"
-							imageMso="SlideShow"
+							imageMso="FileOpen"
 							onAction="OnStartSlideshowClick"
 							getEnabled="GetStartSlideshowEnabled"/>
+				</group>
+				<group id="grpQuizzes" label="Quizzes">
+					<button id="btnQuizPanel"
+							label="Quiz Manager"
+							size="large"
+							imageMso="PaneInsert"
+							onAction="OnQuizPanelClick"
+							getEnabled="GetQuizEnabled"/>
 				</group>
 			</tab>
 
 		</tabs>
 	</ribbon>
 </customUI>
-

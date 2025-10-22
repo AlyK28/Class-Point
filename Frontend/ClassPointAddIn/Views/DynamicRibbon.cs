@@ -1,5 +1,4 @@
 ﻿using ClassPointAddIn.Api.Service;
-using ClassPointAddIn.Api.Services.ClassService;
 using ClassPointAddIn.Api.Services.CourseService;
 using ClassPointAddIn.Users.Auth;
 using System;
@@ -15,8 +14,6 @@ namespace ClassPointAddIn.Views
     public class DynamicRibbon : Office.IRibbonExtensibility
     {
         private Office.IRibbonUI ribbon;
-        private ClassCodeDisplayForm _activeClassForm;
-        private int? _currentClassId;
 
         public DynamicRibbon()
         {
@@ -40,15 +37,46 @@ namespace ClassPointAddIn.Views
             => Globals.ThisAddIn.IsTeacherLoggedIn;
 
         public bool GetStartSlideshowEnabled(Office.IRibbonControl control)
-            => Globals.ThisAddIn.IsTeacherLoggedIn &&
-               Globals.ThisAddIn.HasActivePresentation() &&
-               _activeClassForm == null;
+        {
+            var isEnabled = Globals.ThisAddIn.IsTeacherLoggedIn &&
+                           Globals.ThisAddIn.HasActivePresentation() &&
+                           !Globals.ThisAddIn.HasActiveClass &&
+                           !Globals.ThisAddIn.HasActiveClassForm;
+
+            System.Diagnostics.Debug.WriteLine($"GetStartSlideshowEnabled: " +
+                                               $"IsTeacherLoggedIn={Globals.ThisAddIn.IsTeacherLoggedIn}, " +
+                                               $"HasActivePresentation={Globals.ThisAddIn.HasActivePresentation()}, " +
+                                               $"HasActiveClass={Globals.ThisAddIn.HasActiveClass}, " +
+                                               $"HasActiveClassForm={Globals.ThisAddIn.HasActiveClassForm}, " +
+                                               $"Result={isEnabled}");
+
+            return isEnabled;
+        }
+
+        public bool GetQuizEnabled(Office.IRibbonControl control)
+        {
+            var isTeacherLoggedIn = Globals.ThisAddIn.IsTeacherLoggedIn;
+            var hasActivePresentation = Globals.ThisAddIn.HasActivePresentation();
+            var currentCourseId = Globals.ThisAddIn.CurrentCourseId;
+            var hasCurrentCourse = currentCourseId.HasValue;
+
+            var isEnabled = isTeacherLoggedIn && hasActivePresentation && hasCurrentCourse;
+
+            // Enhanced debugging
+            System.Diagnostics.Debug.WriteLine($"GetQuizEnabled: " +
+                                               $"IsTeacherLoggedIn={isTeacherLoggedIn}, " +
+                                               $"HasActivePresentation={hasActivePresentation}, " +
+                                               $"CurrentCourseId={currentCourseId}, " +
+                                               $"HasCurrentCourse={hasCurrentCourse}, " +
+                                               $"Result={isEnabled}");
+
+            return isEnabled;
+        }
 
         public void OnConnectClick(Office.IRibbonControl control)
         {
             try
             {
-                // create API client and auth service
                 var userApiClient = new UserApiService();
                 var authService = new AuthenticationService(userApiClient);
                 var courseService = new CourseApiService();
@@ -62,6 +90,17 @@ namespace ClassPointAddIn.Views
                         Globals.ThisAddIn.LoadTeacherRibbon();
                         ribbon?.Invalidate();
                         ribbon?.ActivateTab(RibbonConstants.TabTeacher);
+
+                        // Force ribbon refresh after a short delay to ensure course creation completes
+                        var timer = new System.Windows.Forms.Timer { Interval = 1000 };
+                        timer.Tick += (s, e) =>
+                        {
+                            timer.Stop();
+                            timer.Dispose();
+                            ribbon?.Invalidate();
+                            System.Diagnostics.Debug.WriteLine("Ribbon refreshed after login delay");
+                        };
+                        timer.Start();
                     }
                 }
             }
@@ -75,72 +114,101 @@ namespace ClassPointAddIn.Views
         {
             try
             {
-                // Ensure we have a course for the current presentation
-                var (courseId, courseName) = await Globals.ThisAddIn.EnsureCourseForCurrentPresentation();
+                System.Diagnostics.Debug.WriteLine("OnStartSlideshowClick: Starting manual class...");
 
-                var classService = new ClassApiService();
+                // Ensure we have a course before starting the class
+                await Globals.ThisAddIn.EnsureCourseForCurrentPresentation();
 
-                // Create a new class session using the current course
-                var classResponse = await classService.CreateClassFromPowerPointAsync(courseId);
-                _currentClassId = classResponse.Id;
+                var (classCode, classId) = await Globals.ThisAddIn.StartManualClassAsync();
+                Globals.ThisAddIn.ShowClassCodeForm(classCode, Globals.ThisAddIn.CurrentCourseName);
 
-                // Display the class code
-                ShowClassCodeDialog(classResponse.Code, courseName, classService);
-
-                // Refresh ribbon to disable the start slideshow button
                 ribbon?.Invalidate();
+
+                System.Diagnostics.Debug.WriteLine($"OnStartSlideshowClick: Class started with code {classCode}");
             }
             catch (System.InvalidOperationException ex)
             {
-                MessageBox.Show(ex.Message, "Cannot Start Slideshow", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(ex.Message, "Cannot Start Class", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to start slideshow: {ex.Message}",
+                MessageBox.Show($"Failed to start class: {ex.Message}",
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private async void ShowClassCodeDialog(string classCode, string courseName, ClassApiService classService)
+        public async void OnQuizPanelClick(Office.IRibbonControl control)
         {
             try
             {
-                _activeClassForm = new ClassCodeDisplayForm(classCode, courseName);
-                var result = _activeClassForm.ShowDialog();
+                System.Diagnostics.Debug.WriteLine($"OnQuizPanelClick: CurrentCourseId={Globals.ThisAddIn.CurrentCourseId}");
 
-                if (result == DialogResult.OK && _activeClassForm.ShouldEndClass && _currentClassId.HasValue)
+                // Try to ensure we have a course
+                if (!Globals.ThisAddIn.CurrentCourseId.HasValue)
                 {
-                    // End the class session
-                    await classService.EndClassAsync(_currentClassId.Value);
-                    MessageBox.Show("Class session ended successfully.",
-                        "Class Ended", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    System.Diagnostics.Debug.WriteLine("No current course, attempting to create one...");
+
+                    try
+                    {
+                        await Globals.ThisAddIn.EnsureCourseForCurrentPresentation();
+                        System.Diagnostics.Debug.WriteLine($"Course created/ensured: {Globals.ThisAddIn.CurrentCourseId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to create course: {ex.Message}");
+                        MessageBox.Show("Please ensure you have an active presentation with a course.\n\n" +
+                                       "If this problem persists, try:\n" +
+                                       "1. Close and reopen your presentation\n" +
+                                       "2. Log out and log back in\n\n" +
+                                       $"Error: {ex.Message}",
+                            "No Course", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
                 }
+
+                // Now try to show the quiz task pane
+                Globals.ThisAddIn.ToggleQuizTaskPane();
+
+                // Refresh ribbon to update button states
+                ribbon?.Invalidate();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error managing class session: {ex.Message}",
+                MessageBox.Show($"Error toggling quiz panel: {ex.Message}",
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                _activeClassForm = null;
-                _currentClassId = null;
-
-                // Refresh ribbon to re-enable the start slideshow button
-                ribbon?.Invalidate();
             }
         }
 
-        public void OnLogoutClick(Office.IRibbonControl control)
+        public async void OnLogoutClick(Office.IRibbonControl control)
         {
-            // Close any active class session
-            _activeClassForm?.Close();
-            _activeClassForm = null;
-            _currentClassId = null;
+            try
+            {
+                if (Globals.ThisAddIn.HasActiveClass)
+                {
+                    var result = MessageBox.Show(
+                        "You have an active class session. Do you want to end it before logging out?",
+                        "Active Class Session",
+                        MessageBoxButtons.YesNoCancel,
+                        MessageBoxIcon.Question,
+                        MessageBoxDefaultButton.Button1);
 
-            Globals.ThisAddIn.UnloadTeacherRibbon();
-            ribbon?.Invalidate();
-            ribbon?.ActivateTab(RibbonConstants.TabConnect);
+                    if (result == DialogResult.Cancel)
+                        return;
+
+                    if (result == DialogResult.Yes)
+                    {
+                        await Globals.ThisAddIn.EndManualClassAsync();
+                    }
+                }
+
+                Globals.ThisAddIn.UnloadTeacherRibbon();
+                ribbon?.Invalidate();
+                ribbon?.ActivateTab(RibbonConstants.TabConnect);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error during logout: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         public void Ribbon_Load(Office.IRibbonUI ribbonUI)
@@ -175,5 +243,4 @@ namespace ClassPointAddIn.Views
         #endregion
     }
 }
-
 

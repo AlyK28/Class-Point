@@ -213,6 +213,7 @@
     <Compile Include="Api\Services\CourseService\CourseApiService.cs" />
     <Compile Include="Api\Services\CourseService\CourseResponse.cs" />
     <Compile Include="Api\Services\CourseService\TeacherDto.cs" />
+    <Compile Include="Api\Services\QuizzService\QuizApiService.cs" />
     <Compile Include="Api\Services\UserService\Responses\LoginResponse.cs" />
     <Compile Include="Api\Services\UserService\Responses\RegisterResponse.cs" />
     <Compile Include="Api\Services\UserService\Interfaces\IUserApiService.cs" />
@@ -226,6 +227,20 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Users\ValueObjects\JWTToken.cs" />
+    <Compile Include="Views\Base\ModernControls.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Views\Base\ModernDialogs.cs" />
+    <Compile Include="Views\Base\ModernFormBase.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Views\PowerPointCodeDisplay.cs" />
+    <Compile Include="Views\QuizTaskPane.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\SimpleClassCodeDisplay.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Views\ClassCodeDisplayForm.cs">
       <SubType>Form</SubType>
     </Compile>
