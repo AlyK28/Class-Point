@@ -1,15 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Xml.Linq;
-using PowerPoint = Microsoft.Office.Interop.PowerPoint;
-using Office = Microsoft.Office.Core;
+﻿using ClassPointAddIn.Views;
 
 namespace ClassPointAddIn
 {
     public partial class ThisAddIn
     {
+
+        public bool IsTeacherLoggedIn { get; private set; } = false;
+
         private void ThisAddIn_Startup(object sender, System.EventArgs e)
         {
         }
@@ -17,7 +14,20 @@ namespace ClassPointAddIn
         private void ThisAddIn_Shutdown(object sender, System.EventArgs e)
         {
         }
+        protected override Microsoft.Office.Core.IRibbonExtensibility CreateRibbonExtensibilityObject()
+        {
+            return new DynamicRibbon();
+        }
 
+        public void LoadTeacherRibbon()
+        {
+            IsTeacherLoggedIn = true;
+        }
+
+        public void UnloadTeacherRibbon()
+        {
+            IsTeacherLoggedIn = false;
+        }
         #region VSTO generated code
 
         /// <summary>
@@ -29,7 +39,7 @@ namespace ClassPointAddIn
             this.Startup += new System.EventHandler(ThisAddIn_Startup);
             this.Shutdown += new System.EventHandler(ThisAddIn_Shutdown);
         }
-        
+
         #endregion
     }
 }

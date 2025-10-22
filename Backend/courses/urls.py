@@ -5,3 +5,4 @@ router = DefaultRouter()
 router.register('', CourseViewSet, basename='course')
 
 urlpatterns = router.urls
+

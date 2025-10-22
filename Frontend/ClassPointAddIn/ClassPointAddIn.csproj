@@ -209,27 +209,28 @@
     can be found.
   -->
   <ItemGroup>
-    <Compile Include="Api\Responses\LoginResponse.cs" />
-    <Compile Include="Api\Responses\RegisterResponse.cs" />
-    <Compile Include="Api\Service\IUserApiClient.cs" />
-    <Compile Include="Api\Service\UserApiClient.cs" />
+    <Compile Include="Api\BaseApiClient.cs" />
+    <Compile Include="Api\Services\CourseService\CourseApiService.cs" />
+    <Compile Include="Api\Services\CourseService\CourseResponse.cs" />
+    <Compile Include="Api\Services\CourseService\TeacherDto.cs" />
+    <Compile Include="Api\Services\UserService\Responses\LoginResponse.cs" />
+    <Compile Include="Api\Services\UserService\Responses\RegisterResponse.cs" />
+    <Compile Include="Api\Services\UserService\Interfaces\IUserApiService.cs" />
+    <Compile Include="Api\Services\UserService\UserApiService.cs" />
+    <Compile Include="Constants\RibbonConstants.cs" />
+    <Compile Include="Course\Service\CourseService.cs" />
     <Compile Include="Users\Auth\AuthenticationService.cs" />
     <Compile Include="Users\Entities\User.cs" />
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Users\ValueObjects\JWTToken.cs" />
-    <Compile Include="Views\LoginForm.cs">
+    <Compile Include="Views\DynamicRibbon.cs" />
+    <Compile Include="Views\LoginForm .cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="Views\LoginForm.Designer.cs">
-      <DependentUpon>LoginForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Views\LoginRibbon.cs">
-      <SubType>Component</SubType>
-    </Compile>
-    <Compile Include="Views\LoginRibbon.Designer.cs">
-      <DependentUpon>LoginRibbon.cs</DependentUpon>
+    <Compile Include="Views\LoginForm .Designer.cs">
+      <DependentUpon>LoginForm .cs</DependentUpon>
     </Compile>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
@@ -241,12 +242,6 @@
       <DependentUpon>Resources.resx</DependentUpon>
       <DesignTime>True</DesignTime>
     </Compile>
-    <EmbeddedResource Include="Views\LoginForm.resx">
-      <DependentUpon>LoginForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Views\LoginRibbon.resx">
-      <DependentUpon>LoginRibbon.cs</DependentUpon>
-    </EmbeddedResource>
     <None Include="ClassPointAddIn_TemporaryKey.pfx" />
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
@@ -280,6 +275,9 @@
   <ItemGroup>
     <None Include="Resources\Gemini_Generated_Image_w6mknew6mknew6mk.png" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Views\DynamicRibbon.xml" />
+  </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
     <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
@@ -303,7 +301,7 @@
       <FlavorProperties GUID="{BAA0C2D2-18E2-41B9-852F-F413020CAA33}">
         <ProjectProperties HostName="PowerPoint" HostPackage="{29A7B9D7-A7F1-4328-8EF0-6B2D1A56B2C1}" OfficeVersion="15.0" VstxVersion="4.0" ApplicationType="PowerPoint" Language="cs" TemplatesPath="" DebugInfoExeName="#Software\Microsoft\Office\16.0\PowerPoint\InstallRoot\Path#powerpnt.exe" AddItemTemplatesGuid="{51063C3A-E220-4D12-8922-BDA915ACD783}" />
         <Host Name="PowerPoint" GeneratedCodeNamespace="ClassPointAddIn" PublishedHash="69C324AB27932AA2FBF2B7EA72250886FF164DE6" IconIndex="0">
-          <HostItem Name="ThisAddIn" Code="ThisAddIn.cs" CanonicalName="AddIn" CanActivate="false" IconIndex="1" Blueprint="ThisAddIn.Designer.xml" GeneratedCode="ThisAddIn.Designer.cs" PublishedHash="EE3F85D7EA15ACD7613816EB192676CCC7CF8567" />
+          <HostItem Name="ThisAddIn" Code="ThisAddIn.cs" CanonicalName="AddIn" PublishedHash="EE3F85D7EA15ACD7613816EB192676CCC7CF8567" CanActivate="false" IconIndex="1" Blueprint="ThisAddIn.Designer.xml" GeneratedCode="ThisAddIn.Designer.cs" />
         </Host>
       </FlavorProperties>
     </VisualStudio>

@@ -1,4 +1,5 @@
 ﻿using ClassPointAddIn.Api.Service;
+using ClassPointAddIn.Api.Service.ClassPointAddIn.Api.Service;
 using Domain.Users.Entities;
 using Domain.Users.ValueObjects;
 using System.Threading.Tasks;
@@ -7,9 +8,9 @@ namespace ClassPointAddIn.Users.Auth
 {
     public class AuthenticationService
     {
-        private readonly IUserApiClient _userApiClient;
+        private readonly IUserApiService _userApiClient;
 
-        public AuthenticationService(IUserApiClient userApiClient)
+        public AuthenticationService(IUserApiService userApiClient)
         {
             _userApiClient = userApiClient;
         }
@@ -19,6 +20,8 @@ namespace ClassPointAddIn.Users.Auth
             var tokenResponse = await _userApiClient.LoginAsync(username, password);
 
             var token = new JWTToken(tokenResponse.Access, tokenResponse.Refresh);
+
+            BaseApiClient.SetGlobalTokens(token.AccessToken, token.RefreshToken);
 
             var user = new User(username);
             user.AssignToken(token);
