@@ -19,7 +19,14 @@ class QuizViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Teachers see only their own quizzes
+        # For list: only standalone quizzes
+        # For update/delete: include all quizzes (including multi-quiz questions)
+        if self.action in ['list']:
+            return Quiz.objects.filter(
+                created_by=self.request.user,
+                multi_question_id__isnull=True  # Only standalone quizzes
+            )
+        # For retrieve, update, delete: include all quizzes
         return Quiz.objects.filter(created_by=self.request.user)
 
     def perform_create(self, serializer):
@@ -119,21 +126,15 @@ class MultiQuizViewSet(viewsets.ViewSet):
             multi_question_id__isnull=False
         ).values_list('multi_question_id', flat=True).distinct()
         
-        # Build response with multi-quiz summaries
-        multi_quizzes = []
+        # Build response with quizzes grouped by multi_question_id
+        result = {}
         for multi_id in multi_quiz_ids:
             quizzes = Quiz.objects.filter(multi_question_id=multi_id).order_by('question_order')
             if quizzes.exists():
-                first_quiz = quizzes.first()
-                multi_quizzes.append({
-                    'multi_question_id': multi_id,
-                    'title': first_quiz.title,
-                    'question_count': quizzes.count(),
-                    'created_at': first_quiz.created_at
-                })
+                quiz_serializer = QuizSerializer(quizzes, many=True)
+                result[str(multi_id)] = quiz_serializer.data
         
-        serializer = MultiQuizListSerializer(multi_quizzes, many=True)
-        return Response(serializer.data)
+        return Response(result)
     
     def create(self, request):
         """Create a new multi-quiz with multiple questions"""
@@ -152,7 +153,7 @@ class MultiQuizViewSet(viewsets.ViewSet):
         }, status=status.HTTP_201_CREATED)
     
     def retrieve(self, request, pk=None):
-        """Get a specific multi-quiz summary (metadata only)"""
+        """Get a specific multi-quiz with all its questions"""
         try:
             quizzes = Quiz.objects.filter(
                 multi_question_id=pk,
@@ -165,22 +166,8 @@ class MultiQuizViewSet(viewsets.ViewSet):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            first_quiz = quizzes.first()
-            return Response({
-                'multi_question_id': pk,
-                'title': first_quiz.title,
-                'course': first_quiz.course.id,
-                'course_name': first_quiz.course.name,
-                'question_count': quizzes.count(),
-                'created_at': first_quiz.created_at,
-                'created_by': first_quiz.created_by.id,
-                'questions': [{
-                    'id': q.id,
-                    'title': q.title,
-                    'quiz_type': q.quiz_type,
-                    'question_order': q.question_order
-                } for q in quizzes]
-            })
+            serializer = QuizSerializer(quizzes, many=True)
+            return Response(serializer.data)
         except Exception as e:
             return Response(
                 {'detail': str(e)}, 
@@ -209,47 +196,3 @@ class MultiQuizViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-
-class MultiQuizQuestionsView(APIView):
-    """View for managing questions within a multi-quiz"""
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get(self, request, multi_question_id):
-        """List all questions in a specific multi-quiz"""
-        quizzes = Quiz.objects.filter(
-            multi_question_id=multi_question_id,
-            created_by=request.user
-        ).order_by('question_order')
-        
-        serializer = QuizSerializer(quizzes, many=True)
-        return Response(serializer.data)
-    
-    def post(self, request, multi_question_id):
-        """Add a new question to an existing multi-quiz"""
-        # Verify multi-quiz exists and belongs to user
-        existing_quizzes = Quiz.objects.filter(
-            multi_question_id=multi_question_id,
-            created_by=request.user
-        )
-        
-        if not existing_quizzes.exists():
-            return Response(
-                {'detail': 'Multi-quiz not found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Get the next order number
-        max_order = existing_quizzes.aggregate(max_order=Count('question_order'))['max_order'] or 0
-        next_order = max_order + 1
-        
-        # Create new question
-        serializer = QuizSerializer(data={
-            **request.data,
-            'multi_question_id': multi_question_id,
-            'question_order': next_order
-        }, context={'request': request})
-        
-        serializer.is_valid(raise_exception=True)
-        quiz = serializer.save()
-        
-        return Response(serializer.data, status=status.HTTP_201_CREATED) 

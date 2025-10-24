@@ -19,9 +19,14 @@ router.register('answers', StudentAnswerViewSet, basename='answer')
 
 urlpatterns = [
     path('join/', JoinClassView.as_view(), name='join-class'),
+    
+    # Standalone quizzes
     path('quizzes/', StudentQuizListView.as_view(), name='student-quiz-list'),
+    
+    # Multi-quiz endpoints
     path('multi-quiz/', StudentMultiQuizListView.as_view(), name='student-multi-quiz-list'),
-    path('multi-quiz/<uuid:multi_question_id>/questions/', StudentMultiQuizQuestionsView.as_view(), name='student-multi-quiz-questions'),
+    path('multi-quiz/<uuid:multi_question_id>/', StudentMultiQuizQuestionsView.as_view(), name='student-multi-quiz-questions'),
+    
     # Direct list/retrieve for students at /api/students/
     path('', StudentViewSet.as_view({'get': 'list'}), name='student-list-root'),
     path('<int:pk>/', StudentViewSet.as_view({'get': 'retrieve'}), name='student-detail-root'),
