@@ -288,9 +288,10 @@ class StudentQuizListView(APIView):
         
         classroom = request.user.classroom
         
-        # Get quizzes for the course of this class
+        # Get standalone quizzes only (exclude multi-quiz questions)
         quizzes = Quiz.objects.filter(
-            course=classroom.course
+            course=classroom.course,
+            multi_question_id__isnull=True  # Only standalone quizzes
         ).order_by('-created_at')
         
         # Serialize quiz data for students (without sensitive info)
