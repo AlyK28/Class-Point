@@ -152,7 +152,7 @@ class MultiQuizViewSet(viewsets.ViewSet):
         }, status=status.HTTP_201_CREATED)
     
     def retrieve(self, request, pk=None):
-        """Get a specific multi-quiz with all its questions"""
+        """Get a specific multi-quiz summary (metadata only)"""
         try:
             quizzes = Quiz.objects.filter(
                 multi_question_id=pk,
@@ -165,8 +165,22 @@ class MultiQuizViewSet(viewsets.ViewSet):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            serializer = QuizSerializer(quizzes, many=True)
-            return Response(serializer.data)
+            first_quiz = quizzes.first()
+            return Response({
+                'multi_question_id': pk,
+                'title': first_quiz.title,
+                'course': first_quiz.course.id,
+                'course_name': first_quiz.course.name,
+                'question_count': quizzes.count(),
+                'created_at': first_quiz.created_at,
+                'created_by': first_quiz.created_by.id,
+                'questions': [{
+                    'id': q.id,
+                    'title': q.title,
+                    'quiz_type': q.quiz_type,
+                    'question_order': q.question_order
+                } for q in quizzes]
+            })
         except Exception as e:
             return Response(
                 {'detail': str(e)}, 
