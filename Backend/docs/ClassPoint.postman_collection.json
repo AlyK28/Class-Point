@@ -603,6 +603,38 @@
 								}
 							},
 							"response": []
+						},
+						{
+							"name": "Create Image Upload Quiz",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{teacher_jwt}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"course\": {{course_id}},\n  \"title\": \"Upload Photo Assignment\",\n  \"quiz_type\": \"image_upload\",\n  \"properties\": {\n    \"question_text\": \"Upload a photo of your completed homework\",\n    \"max_file_size_mb\": 5,\n    \"allowed_formats\": \"jpg,png,jpeg\"\n  }\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/quizzes/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"quizzes",
+										""
+									]
+								}
+							},
+							"response": []
 						}
 					]
 				},
@@ -875,7 +907,7 @@
 							"response": []
 						},
 						{
-							"name": "Create Answer - Image Upload (Student Token) [NOT_IMPLEMENTED]",
+							"name": "Create Answer - Image Upload (Student Token)",
 							"request": {
 								"method": "POST",
 								"header": [
@@ -889,13 +921,15 @@
 									"formdata": [
 										{
 											"key": "quiz_id",
-											"value": "{{quiz_id}}",
-											"type": "text"
+											"value": "{{image_upload_quiz_id}}",
+											"type": "text",
+											"description": "ID of the image upload quiz"
 										},
 										{
 											"key": "uploaded_file",
 											"type": "file",
-											"src": "path/to/image.jpg"
+											"src": "path/to/image.jpg",
+											"description": "Image file (jpg, png, jpeg). Max size: 5MB"
 										}
 									]
 								},

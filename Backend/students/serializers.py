@@ -334,22 +334,40 @@ class ImageUploadAnswerSerializer(BaseStudentAnswerSerializer):
         request = self.context.get('request')
         validate_no_duplicate_answer(quiz, request, self)
         
-        if not data.get('uploaded_file'):
+        uploaded_file = data.get('uploaded_file')
+        if not uploaded_file:
             raise serializers.ValidationError("Uploaded file is required for image upload questions")
         
-        # Store any additional metadata in answer_data
-        data['answer_data'] = data.get('answer_data', {})
-        # Add NOT_IMPLEMENTED placeholders for image upload-specific features
-        data['answer_data'].update({
-            'image_metadata': 'NOT_IMPLEMENTED',
-            'image_analysis': 'NOT_IMPLEMENTED',
-            'ocr_text': 'NOT_IMPLEMENTED',
-            'object_detection': 'NOT_IMPLEMENTED',
-            'image_comparison': 'NOT_IMPLEMENTED',
-            'file_processing': 'NOT_IMPLEMENTED',
-            'content_analysis': 'NOT_IMPLEMENTED',
-            'automatic_grading': 'NOT_IMPLEMENTED'
-        })
+        # Basic file validation
+        props = quiz.properties or {}
+        max_file_size_mb = props.get('max_file_size_mb', 5)
+        allowed_formats = props.get('allowed_formats', 'jpg,png,jpeg').split(',')
+        
+        # Convert MB to bytes
+        max_file_size_bytes = max_file_size_mb * 1024 * 1024
+        
+        # Check file size
+        if uploaded_file.size > max_file_size_bytes:
+            raise serializers.ValidationError(
+                f"File size exceeds maximum allowed size of {max_file_size_mb}MB"
+            )
+        
+        # Check file format
+        file_extension = uploaded_file.name.split('.')[-1].lower() if '.' in uploaded_file.name else ''
+        allowed_extensions = [fmt.strip().lower().lstrip('.') for fmt in allowed_formats]
+        
+        if file_extension not in allowed_extensions:
+            raise serializers.ValidationError(
+                f"File format not allowed. Allowed formats: {', '.join(allowed_formats)}"
+            )
+        
+        # Store file metadata in answer_data
+        data['answer_data'] = {
+            'file_name': uploaded_file.name,
+            'file_size': uploaded_file.size,
+            'file_format': file_extension
+        }
+        
         return data
     
     def create(self, validated_data):
@@ -448,8 +466,36 @@ class StudentAnswerSerializer(BaseStudentAnswerSerializer):
                 if len(word) < min_word_length:
                     raise serializers.ValidationError(f"Word '{word}' is too short. Minimum length is {min_word_length} characters.")
         
-        elif quiz_type in ['drawing', 'image_upload']:
+        elif quiz_type == 'image_upload':
             if not data.get('uploaded_file'):
-                raise serializers.ValidationError(f"{quiz_type} questions require uploaded_file")
+                raise serializers.ValidationError("Image upload questions require uploaded_file")
+            
+            # Basic file validation for image upload
+            uploaded_file = data.get('uploaded_file')
+            props = quiz.properties or {}
+            max_file_size_mb = props.get('max_file_size_mb', 5)
+            allowed_formats = props.get('allowed_formats', 'jpg,png,jpeg').split(',')
+            
+            # Convert MB to bytes
+            max_file_size_bytes = max_file_size_mb * 1024 * 1024
+            
+            # Check file size
+            if uploaded_file.size > max_file_size_bytes:
+                raise serializers.ValidationError(
+                    f"File size exceeds maximum allowed size of {max_file_size_mb}MB"
+                )
+            
+            # Check file format
+            file_extension = uploaded_file.name.split('.')[-1].lower() if '.' in uploaded_file.name else ''
+            allowed_extensions = [fmt.strip().lower().lstrip('.') for fmt in allowed_formats]
+            
+            if file_extension not in allowed_extensions:
+                raise serializers.ValidationError(
+                    f"File format not allowed. Allowed formats: {', '.join(allowed_formats)}"
+                )
+        
+        elif quiz_type == 'drawing':
+            if not data.get('uploaded_file'):
+                raise serializers.ValidationError("Drawing questions require uploaded_file")
         
         return data
