@@ -826,6 +826,41 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Multi-Quiz for Students",
+          "item": [
+            {
+              "name": "List Available Multi-Quiz (Student Token)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{student_token}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/students/multi-quiz/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "students", "multi-quiz", ""]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Multi-Quiz Questions (Student Token)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{student_token}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/students/multi-quiz/{{multi_question_id}}/questions/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "students", "multi-quiz", "{{multi_question_id}}", "questions", ""]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     }
