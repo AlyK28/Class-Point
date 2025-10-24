@@ -153,7 +153,7 @@ class StudentAnswerViewSet(viewsets.ModelViewSet):
         # PERMISSIONS: Check if student is enrolled in the course
         # PERMISSIONS: Validate that the quiz belongs to the student's enrolled course
         # PERMISSIONS: Teachers can view all student submissions for their multi-quiz
-        
+        # line
         # Default serializer for read operations or unknown quiz types
         return StudentAnswerSerializer
 
