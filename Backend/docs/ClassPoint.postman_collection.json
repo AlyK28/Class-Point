@@ -692,7 +692,7 @@
               "path": ["api", "students", "answers", ""]
             },
             "body": {
-              "mode": "formdata",
+              "order": "formdata",
               "formdata": [
                 { "key": "quiz_id", "value": "{{quiz_id}}", "type": "text" },
                 { "key": "uploaded_file", "type": "file", "src": "path/to/image.jpg" }
@@ -700,6 +700,71 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Multi-Quiz Answers",
+          "item": [
+            {
+              "name": "Answer Multi-Quiz Question 1 (Multiple Choice)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{student_token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/students/answers/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "students", "answers", ""]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"quiz_id\": {{multi_quiz_question1_id}},\n  \"selected_choice_indices\": [1]\n}"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Answer Multi-Quiz Question 2 (Short Answer)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{student_token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/students/answers/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "students", "answers", ""]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"quiz_id\": {{multi_quiz_question2_id}},\n  \"answer_text\": \"Addition is combining numbers to get a sum\"\n}"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Answer Multi-Quiz Question 3 (Word Cloud)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{student_token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/students/answers/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "students", "answers", ""]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"quiz_id\": {{multi_quiz_question3_id}},\n  \"answer_text\": \"addition, subtraction, multiplication, division, calculus\"\n}"
+                }
+              },
+              "response": []
+            }
+          ]
         },
         {
           "name": "List Answers (Teacher Token)",
@@ -782,6 +847,9 @@
     { "key": "student_token", "value": "" },
     { "key": "quiz_id", "value": "1" },
     { "key": "multi_question_id", "value": "" },
+    { "key": "multi_quiz_question1_id", "value": "1" },
+    { "key": "multi_quiz_question2_id", "value": "2" },
+    { "key": "multi_quiz_question3_id", "value": "3" },
     
     { "key": "quiz_title", "value": "Sample Quiz" },
     { "key": "quiz_title_updated", "value": "Updated Sample Quiz" },

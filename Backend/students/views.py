@@ -153,7 +153,6 @@ class StudentAnswerViewSet(viewsets.ModelViewSet):
         # PERMISSIONS: Check if student is enrolled in the course
         # PERMISSIONS: Validate that the quiz belongs to the student's enrolled course
         # PERMISSIONS: Teachers can view all student submissions for their multi-quiz
-        # line
         # Default serializer for read operations or unknown quiz types
         return StudentAnswerSerializer
 
@@ -316,3 +315,61 @@ class StudentQuizListView(APIView):
                 'active': classroom.active
             }
         })
+
+
+class StudentMultiQuizListView(APIView):
+    """View for students to list available multi-quiz"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        """List all multi-quiz available to the student"""
+        # Get all quizzes that are part of multi-quiz
+        quizzes = Quiz.objects.filter(
+            multi_question_id__isnull=False,
+            course__classes__enrollments__student__user_id=request.user.id
+        ).distinct().values('multi_question_id').distinct()
+        
+        # Build response with multi-quiz summaries
+        multi_quizzes = []
+        for quiz in quizzes:
+            multi_id = quiz['multi_question_id']
+            questions = Quiz.objects.filter(multi_question_id=multi_id).order_by('question_order')
+            if questions.exists():
+                first_question = questions.first()
+                multi_quizzes.append({
+                    'multi_question_id': multi_id,
+                    'title': first_question.title,
+                    'question_count': questions.count(),
+                    'created_at': first_question.created_at,
+                    'course_name': first_question.course.name
+                })
+        
+        return Response(multi_quizzes)
+
+
+class StudentMultiQuizQuestionsView(APIView):
+    """View for students to get questions in a specific multi-quiz"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, multi_question_id):
+        """Get all questions in a specific multi-quiz"""
+        # Get student's enrollments
+        student = request.user
+        enrollments = StudentClassEnrollment.objects.filter(student__user_id=student.id)
+        enrolled_courses = [e.classroom.course for e in enrollments]
+        
+        # Get questions from this multi-quiz that belong to enrolled courses
+        questions = Quiz.objects.filter(
+            multi_question_id=multi_question_id,
+            course__in=enrolled_courses
+        ).order_by('question_order')
+        
+        if not questions.exists():
+            return Response(
+                {'detail': 'Multi-quiz not found or not available'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        from quizzes.serializers import QuizSerializer
+        serializer = QuizSerializer(questions, many=True)
+        return Response(serializer.data)
