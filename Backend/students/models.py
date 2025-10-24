@@ -119,27 +119,19 @@ class StudentAnswer(models.Model):
                 'max_words': props.get('max_words_per_student'),
                 'allow_duplicates': bool(props.get('allow_duplicates', False))
             }
-        elif quiz_type_code in ['drawing', 'image_upload']:
+        elif quiz_type_code == 'drawing':
             return {
-                'type': quiz_type_code,
+                'type': 'drawing',
                 'canvas_width': props.get('canvas_width'),
                 'canvas_height': props.get('canvas_height'),
                 'max_file_size': props.get('max_file_size_mb'),
-                'allowed_formats': props.get('allowed_formats'),
-                'drawing_strokes': 'NOT_IMPLEMENTED',
-                'drawing_colors': 'NOT_IMPLEMENTED',
-                'drawing_shapes': 'NOT_IMPLEMENTED',
-                'drawing_metadata': 'NOT_IMPLEMENTED',
-                'drawing_analysis': 'NOT_IMPLEMENTED',
-                'drawing_comparison': 'NOT_IMPLEMENTED',
-                'image_metadata': 'NOT_IMPLEMENTED',
-                'image_analysis': 'NOT_IMPLEMENTED',
-                'ocr_text': 'NOT_IMPLEMENTED',
-                'object_detection': 'NOT_IMPLEMENTED',
-                'image_comparison': 'NOT_IMPLEMENTED',
-                'file_processing': 'NOT_IMPLEMENTED',
-                'content_analysis': 'NOT_IMPLEMENTED',
-                'automatic_grading': 'NOT_IMPLEMENTED'
+                'allowed_formats': props.get('allowed_formats')
+            }
+        elif quiz_type_code == 'image_upload':
+            return {
+                'type': 'image_upload',
+                'max_file_size': props.get('max_file_size_mb'),
+                'allowed_formats': props.get('allowed_formats')
             }
         
         return {'type': 'unknown'}
