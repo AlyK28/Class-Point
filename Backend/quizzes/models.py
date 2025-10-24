@@ -23,12 +23,18 @@ class Quiz(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='created_quizzes')
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # ALAA_SAJA_TODO: Add multi-quiz support
-    # Add these two fields to group quizzes into multi-quiz exams:
+    # Multi-quiz support
     # If multi_question_id is NULL, it's a standalone quiz (current behavior)
     # If multi_question_id is set, it's part of a multi-quiz
-   
-   # order number to know the order of the quiz in the multi-quiz
+    multi_question_id = models.UUIDField(
+        blank=True, 
+        null=True, 
+        help_text="If set, this quiz is part of a multi-quiz. If NULL, it's a standalone quiz."
+    )
+    question_order = models.PositiveIntegerField(
+        default=0,
+        help_text="Order of this question within the multi-quiz (0 for standalone quizzes)"
+    )
 
     # --- GLOBAL OPTIONS (apply to all quiz types) ---
     start_with_slide = models.BooleanField(default=True)
@@ -46,10 +52,13 @@ class Quiz(models.Model):
 
     class Meta:
         ordering = ['-created_at']
-        # ALAA_SAJA_TODO: Add database constraints for multi-quiz
-        # Add constraints to ensure:
-        # 1. Questions in the same multi-quiz have unique order numbers
-        # 2. Proper ordering within multi-quiz
+        constraints = [
+            models.UniqueConstraint(
+                fields=['multi_question_id', 'question_order'],
+                condition=models.Q(multi_question_id__isnull=False),
+                name='unique_question_order_per_multi_quiz'
+            )
+        ]
 
 
     def clean(self):
@@ -110,15 +119,22 @@ class Quiz(models.Model):
             if not isinstance(allowed_formats, str) or not allowed_formats.strip():
                 raise ValidationError("Allowed formats must be a non-empty string")
 
-        # ALAA_SAJA_TODO: Add validation for multi-quiz
-        # Add validation logic to ensure:
-        # 1. If multi_question_id is set, question_order must be > 0
-        # 2. If multi_question_id is NULL, question_order should be 0
-        # 3. Validate that all questions in a multi-quiz belong to the same course
-        # 4. Validate that all questions in a multi-quiz are created by the same teacher
-        # 5. Validate that the course exists and user has permission to create quizzes in it
-        # Example: if self.multi_question_id and self.question_order == 0: raise ValidationError(...)
-        # Example: Check course ownership and teacher permissions
+        # Multi-quiz validation
+        if self.multi_question_id and self.question_order == 0:
+            raise ValidationError("Questions in multi-quiz must have order > 0")
+        
+        if not self.multi_question_id and self.question_order > 0:
+            raise ValidationError("Standalone quizzes should have order = 0")
+        
+        # Validate that all questions in a multi-quiz belong to the same course
+        if self.multi_question_id:
+            existing_quizzes = Quiz.objects.filter(multi_question_id=self.multi_question_id).exclude(id=self.id)
+            if existing_quizzes.exists():
+                first_quiz = existing_quizzes.first()
+                if first_quiz.course != self.course:
+                    raise ValidationError("All questions in a multi-quiz must belong to the same course")
+                if first_quiz.created_by != self.created_by:
+                    raise ValidationError("All questions in a multi-quiz must be created by the same teacher")
 
     def __str__(self):
         return f"{self.title} ({self.quiz_type})"
