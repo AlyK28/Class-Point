@@ -350,6 +350,111 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Multi-Quiz",
+          "item": [
+            {
+              "name": "List Multi-Quiz",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{teacher_jwt}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/quizzes/multi-quiz/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "quizzes", "multi-quiz", ""]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Multi-Quiz",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{teacher_jwt}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/quizzes/multi-quiz/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "quizzes", "multi-quiz", ""]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Math Assessment\",\n  \"course\": {{course_id}},\n  \"questions\": [\n    {\n      \"title\": \"Question 1: What is 2+2?\",\n      \"quiz_type\": \"multiple_choice\",\n      \"question_order\": 1,\n      \"properties\": {\n        \"question_text\": \"What is 2 + 2?\",\n        \"choices\": [\n          {\"text\": \"3\", \"is_correct\": false},\n          {\"text\": \"4\", \"is_correct\": true},\n          {\"text\": \"5\", \"is_correct\": false}\n        ]\n      }\n    },\n    {\n      \"title\": \"Question 2: Explain addition\",\n      \"quiz_type\": \"short_answer\",\n      \"question_order\": 2,\n      \"properties\": {\n        \"question_text\": \"Explain the concept of addition\",\n        \"correct_answer\": \"Addition is combining numbers\",\n        \"expected_keywords\": \"combining, numbers, sum\"\n      }\n    },\n    {\n      \"title\": \"Question 3: List math terms\",\n      \"quiz_type\": \"word_cloud\",\n      \"question_order\": 3,\n      \"properties\": {\n        \"question_text\": \"List math terms\",\n        \"max_words_per_student\": 5\n      }\n    }\n  ]\n}"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Multi-Quiz Details",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{teacher_jwt}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/quizzes/multi-quiz/{{multi_question_id}}/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "quizzes", "multi-quiz", "{{multi_question_id}}", ""]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Questions in Multi-Quiz",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{teacher_jwt}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/quizzes/multi-quiz/{{multi_question_id}}/questions/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "quizzes", "multi-quiz", "{{multi_question_id}}", "questions", ""]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Add Question to Multi-Quiz",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{teacher_jwt}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/quizzes/multi-quiz/{{multi_question_id}}/questions/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "quizzes", "multi-quiz", "{{multi_question_id}}", "questions", ""]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"course\": {{course_id}},\n  \"title\": \"Question 4: Solve equation\",\n  \"quiz_type\": \"short_answer\",\n  \"properties\": {\n    \"question_text\": \"Solve for x: 2x + 5 = 15\",\n    \"correct_answer\": \"x = 5\",\n    \"expected_keywords\": \"x, equals, five\"\n  }\n}"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Multi-Quiz",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{teacher_jwt}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/quizzes/multi-quiz/{{multi_question_id}}/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "quizzes", "multi-quiz", "{{multi_question_id}}", ""]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -676,6 +781,7 @@
     { "key": "student_id", "value": "1" },
     { "key": "student_token", "value": "" },
     { "key": "quiz_id", "value": "1" },
+    { "key": "multi_question_id", "value": "" },
     
     { "key": "quiz_title", "value": "Sample Quiz" },
     { "key": "quiz_title_updated", "value": "Updated Sample Quiz" },
