@@ -3,7 +3,7 @@ from django.urls import path
 from .views import (
     QuizViewSet,
     CreateShortAnswerQuizView, CreateMultipleChoiceQuizView, CreateWordCloudQuizView,
-    MultiQuizViewSet, MultiQuizQuestionsView
+    MultiQuizViewSet
 )
 
 router = DefaultRouter()
@@ -17,7 +17,6 @@ urlpatterns = [
     # Multi-quiz URLs
     path('multi-quiz/', MultiQuizViewSet.as_view({'get': 'list', 'post': 'create'}), name='multi_quiz_list'),
     path('multi-quiz/<uuid:pk>/', MultiQuizViewSet.as_view({'get': 'retrieve', 'delete': 'destroy'}), name='multi_quiz_detail'),
-    path('multi-quiz/<uuid:multi_question_id>/questions/', MultiQuizQuestionsView.as_view(), name='multi_quiz_questions'),
 ]
 
 urlpatterns += router.urls

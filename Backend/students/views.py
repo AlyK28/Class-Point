@@ -324,28 +324,25 @@ class StudentMultiQuizListView(APIView):
     
     def get(self, request):
         """List all multi-quiz available to the student"""
-        # Get all quizzes that are part of multi-quiz
-        quizzes = Quiz.objects.filter(
+        # Get student ID from StudentUser
+        student_id = request.user.student.id
+        
+        # Get all unique multi_question_ids for quizzes in student's enrolled courses
+        multi_quiz_ids = Quiz.objects.filter(
             multi_question_id__isnull=False,
-            course__classes__enrollments__student__user_id=request.user.id
-        ).distinct().values('multi_question_id').distinct()
+            course__classes__enrollments__student_id=student_id
+        ).values_list('multi_question_id', flat=True).distinct()
         
-        # Build response with multi-quiz summaries
-        multi_quizzes = []
-        for quiz in quizzes:
-            multi_id = quiz['multi_question_id']
-            questions = Quiz.objects.filter(multi_question_id=multi_id).order_by('question_order')
-            if questions.exists():
-                first_question = questions.first()
-                multi_quizzes.append({
-                    'multi_question_id': multi_id,
-                    'title': first_question.title,
-                    'question_count': questions.count(),
-                    'created_at': first_question.created_at,
-                    'course_name': first_question.course.name
-                })
+        # Build response with quizzes grouped by multi_question_id
+        result = {}
+        for multi_id in multi_quiz_ids:
+            quizzes = Quiz.objects.filter(multi_question_id=multi_id).order_by('question_order')
+            if quizzes.exists():
+                from quizzes.serializers import QuizSerializer
+                quiz_serializer = QuizSerializer(quizzes, many=True)
+                result[str(multi_id)] = quiz_serializer.data
         
-        return Response(multi_quizzes)
+        return Response(result)
 
 
 class StudentMultiQuizQuestionsView(APIView):
@@ -355,8 +352,8 @@ class StudentMultiQuizQuestionsView(APIView):
     def get(self, request, multi_question_id):
         """Get all questions in a specific multi-quiz"""
         # Get student's enrollments
-        student = request.user
-        enrollments = StudentClassEnrollment.objects.filter(student__user_id=student.id)
+        student_id = request.user.student.id
+        enrollments = StudentClassEnrollment.objects.filter(student_id=student_id)
         enrolled_courses = [e.classroom.course for e in enrollments]
         
         # Get questions from this multi-quiz that belong to enrolled courses
