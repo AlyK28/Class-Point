@@ -2,11 +2,9 @@ from rest_framework.routers import DefaultRouter
 from django.urls import path
 from .views import (
     QuizViewSet,
-    CreateShortAnswerQuizView, CreateMultipleChoiceQuizView, CreateWordCloudQuizView
+    CreateShortAnswerQuizView, CreateMultipleChoiceQuizView, CreateWordCloudQuizView,
+    MultiQuizViewSet, MultiQuizQuestionsView
 )
-
-# ALAA_SAJA_TODO: Import new multi-quiz views
-# Add imports for: MultiQuizViewSet, MultiQuizQuestionsView, MultiQuizSubmissionView
 
 router = DefaultRouter()
 router.register('', QuizViewSet, basename='quiz')
@@ -16,8 +14,10 @@ urlpatterns = [
     path('create/multiple-choice/', CreateMultipleChoiceQuizView.as_view(), name='create_multiple_choice_quiz'),
     path('create/word-cloud/', CreateWordCloudQuizView.as_view(), name='create_word_cloud_quiz'),
     
-    # ALAA_SAJA_TODO: Add multi-quiz URL patterns
-    # Add URL patterns for multi-quiz functionality:
+    # Multi-quiz URLs
+    path('multi-quiz/', MultiQuizViewSet.as_view({'get': 'list', 'post': 'create'}), name='multi_quiz_list'),
+    path('multi-quiz/<uuid:pk>/', MultiQuizViewSet.as_view({'get': 'retrieve', 'delete': 'destroy'}), name='multi_quiz_detail'),
+    path('multi-quiz/<uuid:multi_question_id>/questions/', MultiQuizQuestionsView.as_view(), name='multi_quiz_questions'),
 ]
 
 urlpatterns += router.urls
