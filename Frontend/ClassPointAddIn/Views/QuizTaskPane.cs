@@ -612,11 +612,8 @@ namespace ClassPointAddIn.Views.Quizzes
 
                 if (response != null)
                 {
-                    MessageBox.Show($"Quiz saved successfully.\nID: {response.Id}\nTitle: {response.Title}", "Quiz Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                else
-                {
-                    MessageBox.Show("Quiz saved but received no response data.", "Quiz Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    // Add the quiz button to the slide with the quiz ID directly without dialog
+                    Globals.ThisAddIn.AddQuizButtonToSlideWithQuizId(response.Id, response.Title);
                 }
             }
             catch (Exception ex)

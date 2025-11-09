@@ -33,6 +33,11 @@ namespace ClassPointAddIn.Api.Services.ClassService
             return await PostAsync<CreateClassRequest, ClassResponse>("create-class/", request);
         }
 
+        public async Task<ClassResponse> GetClassAsync(int classId)
+        {
+            return await GetAsync<ClassResponse>($"{classId}/");
+        }
+
         public async Task<ClassResponse> EndClassAsync(int classId)
         {
             var request = new { active = false };

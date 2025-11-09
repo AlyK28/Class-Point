@@ -7,6 +7,7 @@ using Microsoft.Office.Tools;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 
 namespace ClassPointAddIn
 {
@@ -25,6 +26,10 @@ namespace ClassPointAddIn
         private ClassApiService _classApiService;
         private CustomTaskPane _quizTaskPane;
         private QuizTaskPane _quizTaskPaneControl;
+        private CustomTaskPane _shortAnswerTaskPane;
+        private ShortAnswerTaskPane _shortAnswerTaskPaneControl;
+        private QuizResultsForm _activeQuizResultsForm; // Track active quiz results dialog
+        private ShortAnswerResultsForm _activeShortAnswerResultsForm; // Track active short answer results dialog
 
         public void ShowQuizTaskPane()
         {
@@ -56,92 +61,467 @@ namespace ClassPointAddIn
                 System.Windows.Forms.MessageBox.Show($"Error showing quiz pane: {ex.Message}", "Error");
             }
         }
+
+        public void ShowShortAnswerTaskPane()
+        {
+            try
+            {
+                if (_shortAnswerTaskPane == null)
+                {
+                    _shortAnswerTaskPaneControl = new ShortAnswerTaskPane();
+
+                    _shortAnswerTaskPane = CustomTaskPanes.Add(_shortAnswerTaskPaneControl, "Short Answer Quiz");
+                    _shortAnswerTaskPane.Width = 350;
+                    _shortAnswerTaskPane.DockPosition = Microsoft.Office.Core.MsoCTPDockPosition.msoCTPDockPositionRight;
+                    _shortAnswerTaskPane.DockPositionRestrict = Microsoft.Office.Core.MsoCTPDockPositionRestrict.msoCTPDockPositionRestrictNoChange;
+                }
+
+                // Update course ID if available
+                if (CurrentCourseId.HasValue)
+                {
+                    _shortAnswerTaskPaneControl.SetCourseId(CurrentCourseId.Value);
+                }
+
+                _shortAnswerTaskPane.Visible = true;
+
+                Debug.WriteLine("Short Answer Task Pane shown");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ShowShortAnswerTaskPane Error: {ex.Message}");
+                System.Windows.Forms.MessageBox.Show($"Error showing short answer pane: {ex.Message}", "Error");
+            }
+        }
+
         private void Application_WindowSelectionChange(Microsoft.Office.Interop.PowerPoint.Selection Sel)
         {
             try
             {
+                Debug.WriteLine($"WindowSelectionChange triggered. Selection type: {Sel.Type}");
+
                 // Check if the selection contains a quiz button
                 if (Sel.Type == Microsoft.Office.Interop.PowerPoint.PpSelectionType.ppSelectionShapes)
                 {
+                    Debug.WriteLine($"Selection is shapes. Shape count: {Sel.ShapeRange.Count}");
+
                     foreach (Microsoft.Office.Interop.PowerPoint.Shape shape in Sel.ShapeRange)
                     {
+                        Debug.WriteLine($"Checking shape: {shape.Name}");
+
                         // Check if this is a quiz button
                         bool isQuizButton = false;
+                        int quizId = 0;
+                        string quizType = null;
+
                         try
                         {
+                            Debug.WriteLine($"Shape has {shape.Tags.Count} tags");
+
                             for (int i = 1; i <= shape.Tags.Count; i++)
                             {
-                                if (shape.Tags.Name(i) == "QuizButton" && shape.Tags.Value(i) == "MultiChoiceQuiz")
+                                var tagName = shape.Tags.Name(i);
+                                var tagValue = shape.Tags.Value(i);
+                                Debug.WriteLine($"Tag {i}: {tagName} = {tagValue}");
+
+                                // Check if this is ANY quiz button (not just MultiChoiceQuiz)
+                                if (tagName.Equals("QuizButton", StringComparison.OrdinalIgnoreCase))
                                 {
                                     isQuizButton = true;
-                                    break;
+                                    quizType = tagValue;  // Store the quiz type (ShortAnswerQuiz or MultiChoiceQuiz)
+                                    Debug.WriteLine($"Quiz button detected! Type: {tagValue}");
+                                }
+                                if (tagName.Equals("QuizId", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    int.TryParse(tagValue, out quizId);
+                                    Debug.WriteLine($"Quiz ID found: {quizId}");
                                 }
                             }
                         }
-                        catch
+                        catch (Exception tagEx)
                         {
-                            // Ignore tag access errors
+                            Debug.WriteLine($"Error reading tags: {tagEx.Message}");
                         }
 
                         if (isQuizButton)
                         {
-                            System.Diagnostics.Debug.WriteLine("Quiz button selected - showing task pane");
+                            Debug.WriteLine($"Quiz button selected - Quiz ID: {quizId}, Type: {quizType}");
 
-                            // Show the quiz task pane (existing behavior)
-                            ShowQuizTaskPane();
-
-                            // Prepare data for the results dialog.
-                            // Prefer real configured settings from the task pane if available; otherwise use sample data.
-                            int numberOfChoices = 4;
-                            List<int> correctIndices = new List<int> { 0 };
-
-                            try
+                            // Only show multiple choice task pane for multiple choice quizzes
+                            if (quizType == "MultiChoiceQuiz")
                             {
-                                if (_quizTaskPaneControl != null)
-                                {
-                                    numberOfChoices = _quizTaskPaneControl.GetNumberOfChoices();
-                                    var configuredCorrect = _quizTaskPaneControl.GetCorrectAnswerIndices();
-                                    if (configuredCorrect != null && configuredCorrect.Count > 0)
-                                        correctIndices = configuredCorrect;
-                                }
+                                Debug.WriteLine("Showing multiple choice task pane");
+                                ShowQuizTaskPane();
                             }
-                            catch (Exception ex)
+                            else
                             {
-                                System.Diagnostics.Debug.WriteLine($"Error reading task pane settings for results dialog: {ex.Message}");
+                                Debug.WriteLine($"Skipping task pane for quiz type: {quizType}");
                             }
 
-                            // Build sample percentages (even split) — replace with real API data if available
-                            var percentages = new int[numberOfChoices];
-                            var basePercent = 100 / numberOfChoices;
-                            var remainder = 100 % numberOfChoices;
-                            for (int i = 0; i < numberOfChoices; i++)
-                            {
-                                percentages[i] = basePercent + (i < remainder ? 1 : 0);
-                            }
-
-                            // Show results dialog (modal)
-                            try
-                            {
-                                using (var dlg = new ClassPointAddIn.Views.Quizzes.QuizResultsForm(percentages, correctIndices))
-                                {
-                                    dlg.ShowDialog();
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Failed to show quiz results dialog: {ex.Message}");
-                            }
+                            // Show quiz results dialog with real data if we have a quiz ID
+                            Debug.WriteLine("Calling ShowQuizResultsDialogAsync...");
+                            ShowQuizResultsDialogAsync(quizId);
 
                             break;
                         }
+                        else
+                        {
+                            Debug.WriteLine("This shape is not a quiz button");
+                        }
                     }
+                }
+                else
+                {
+                    Debug.WriteLine($"Selection is not shapes, it's: {Sel.Type}");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Application_WindowSelectionChange Error: {ex.Message}");
+                Debug.WriteLine($"Application_WindowSelectionChange Error: {ex.Message}");
+                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
             }
         }
+
+        private void ShowAndActivateForm(QuizResultsForm form)
+        {
+            if (form == null || form.IsDisposed)
+                return;
+
+            Debug.WriteLine($"[ThisAddIn] ShowAndActivateForm called on thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+
+            // Use ShowDialog for modal behavior with proper message pump
+            // This is how LoginForm works successfully
+            form.ShowDialog();
+
+            Debug.WriteLine($"[ThisAddIn] ShowDialog completed");
+        }
+
+        private void ShowAndActivateForm(ShortAnswerResultsForm form)
+        {
+            if (form == null || form.IsDisposed)
+                return;
+
+            Debug.WriteLine($"[ThisAddIn] ShowAndActivateForm (ShortAnswer) called on thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+
+            // Ensure we're on the UI thread before showing the dialog
+            if (form.InvokeRequired)
+            {
+                Debug.WriteLine($"[ThisAddIn] InvokeRequired - marshaling to UI thread");
+                form.Invoke(new System.Action(() =>
+                {
+                    Debug.WriteLine($"[ThisAddIn] Now on UI thread {System.Threading.Thread.CurrentThread.ManagedThreadId}, showing dialog");
+                    form.ShowDialog();
+                }));
+            }
+            else
+            {
+                Debug.WriteLine($"[ThisAddIn] Already on UI thread, showing dialog directly");
+                // Use ShowDialog for modal behavior with proper message pump
+                form.ShowDialog();
+            }
+
+            Debug.WriteLine($"[ThisAddIn] ShowDialog completed");
+        }
+
+        private async void ShowQuizResultsDialogAsync(int quizId)
+        {
+            try
+            {
+                Debug.WriteLine($"[ThisAddIn] ======================================");
+                Debug.WriteLine($"[ThisAddIn] ShowQuizResultsDialogAsync START");
+                Debug.WriteLine($"[ThisAddIn] QuizId: {quizId}");
+                Debug.WriteLine($"[ThisAddIn] Thread: {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+                Debug.WriteLine($"[ThisAddIn] ======================================");
+
+                if (quizId > 0)
+                {
+                    Debug.WriteLine("[ThisAddIn] Fetching quiz details to determine quiz type...");
+                    var quizService = new Api.Services.QuizService.QuizApiService();
+                    var quizDetails = await quizService.GetQuizAsync(quizId).ConfigureAwait(true);
+
+                    Debug.WriteLine($"[ThisAddIn] Quiz details received: {quizDetails != null}");
+                    if (quizDetails != null)
+                    {
+                        Debug.WriteLine($"[ThisAddIn] Quiz ID: {quizDetails.Id}");
+                        Debug.WriteLine($"[ThisAddIn] Quiz Title: {quizDetails.Title}");
+                        Debug.WriteLine($"[ThisAddIn] Quiz Type: '{quizDetails.QuizType}'");
+                        Debug.WriteLine($"[ThisAddIn] Quiz Type Length: {quizDetails.QuizType?.Length ?? 0}");
+                        Debug.WriteLine($"[ThisAddIn] Quiz Type == 'short_answer': {quizDetails.QuizType == "short_answer"}");
+                    }
+
+                    // Check if this is a short answer quiz
+                    if (quizDetails != null && quizDetails.QuizType == "short_answer")
+                    {
+                        Debug.WriteLine("[ThisAddIn] *** ROUTING TO SHORT ANSWER RESULTS ***");
+                        await ShowShortAnswerResultsAsync(quizId, quizDetails.Properties?.QuestionText ?? "Short Answer Question");
+                        return;
+                    }
+                    else
+                    {
+                        Debug.WriteLine("[ThisAddIn] *** ROUTING TO MULTIPLE CHOICE RESULTS ***");
+                    }
+                }
+
+                // Check if dialog is already open for a DIFFERENT quiz - close it
+                if (_activeQuizResultsForm != null && !_activeQuizResultsForm.IsDisposed)
+                {
+                    int currentQuizId = _activeQuizResultsForm.QuizId;
+
+                    if (currentQuizId == quizId)
+                    {
+                        // Same quiz - just bring to front
+                        Debug.WriteLine("[ThisAddIn] Quiz results dialog already open for same quiz - bringing to front");
+
+                        if (_activeQuizResultsForm.InvokeRequired)
+                        {
+                            _activeQuizResultsForm.Invoke(new Action(() =>
+                            {
+                                if (!_activeQuizResultsForm.IsDisposed)
+                                {
+                                    _activeQuizResultsForm.BringToFront();
+                                    _activeQuizResultsForm.Activate();
+                                }
+                            }));
+                        }
+                        else
+                        {
+                            _activeQuizResultsForm.BringToFront();
+                            _activeQuizResultsForm.Activate();
+                        }
+                        return;
+                    }
+                    else
+                    {
+                        // Different quiz - close the old form
+                        Debug.WriteLine($"[ThisAddIn] Different quiz detected (current: {currentQuizId}, new: {quizId}) - closing old form");
+
+                        if (_activeQuizResultsForm.InvokeRequired)
+                        {
+                            _activeQuizResultsForm.Invoke(new Action(() =>
+                            {
+                                if (!_activeQuizResultsForm.IsDisposed)
+                                {
+                                    _activeQuizResultsForm.Close();
+                                }
+                            }));
+                        }
+                        else
+                        {
+                            _activeQuizResultsForm.Close();
+                        }
+
+                        _activeQuizResultsForm = null;
+                    }
+                }
+
+                if (quizId > 0)
+                {
+                    Debug.WriteLine("[ThisAddIn] Fetching quiz submission stats from API...");
+                    Debug.WriteLine($"[ThisAddIn] Before API call - thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+
+                    // Fetch real submission data from API
+                    var quizService = new Api.Services.QuizService.QuizApiService();
+                    var stats = await quizService.GetQuizSubmissionStatsAsync(quizId).ConfigureAwait(true);
+
+                    Debug.WriteLine($"[ThisAddIn] After API call - thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+                    Debug.WriteLine($"[ThisAddIn] API response - Stats null: {stats == null}, ChoiceStats null: {stats?.ChoiceStats == null}");
+
+                    if (stats != null && stats.ChoiceStats != null)
+                    {
+                        Debug.WriteLine($"[ThisAddIn] Processing stats - TotalSubmissions: {stats.TotalSubmissions}, ChoiceCount: {stats.ChoiceStats.Count}");
+
+                        var percentagesData = stats.ChoiceStats.Select(c => c.Percentage).ToArray();
+                        var submissionCounts = stats.ChoiceStats.Select(c => c.Count).ToArray();
+                        var labels = stats.ChoiceStats.Select(c => c.Label).ToList();
+                        var correctIndicesData = stats.ChoiceStats
+                            .Where(c => c.IsCorrect)
+                            .Select(c => c.Index)
+                            .ToList();
+                        var studentNamesPerChoice = stats.ChoiceStats.Select(c => c.Students ?? new List<string>()).ToList();
+
+                        Debug.WriteLine($"[ThisAddIn] Creating QuizResultsForm with processed data...");
+
+                        _activeQuizResultsForm = new ClassPointAddIn.Views.Quizzes.QuizResultsForm(
+                            percentagesData,
+                            correctIndicesData,
+                            labels,
+                            submissionCounts,
+                            stats.TotalSubmissions,
+                            studentNamesPerChoice,
+                            quizId,
+                            stats.EnrolledStudents);
+
+                        _activeQuizResultsForm.FormClosed += (s, e) => _activeQuizResultsForm = null;
+
+                        Debug.WriteLine($"[ThisAddIn] Calling ShowDialog()...");
+                        ShowAndActivateForm(_activeQuizResultsForm);
+                        Debug.WriteLine($"[ThisAddIn] ShowDialog() completed successfully");
+                        return;
+                    }
+                }
+
+                // Fallback to sample data if no quiz ID or API call failed
+                Debug.WriteLine("[ThisAddIn] Using fallback sample data (no quiz ID or API failed)");
+
+                int numberOfChoices = 4;
+                List<int> correctIndices = new List<int> { 0 };
+
+                if (_quizTaskPaneControl != null)
+                {
+                    numberOfChoices = _quizTaskPaneControl.GetNumberOfChoices();
+                    var configured = _quizTaskPaneControl.GetCorrectAnswerIndices();
+                    if (configured != null && configured.Count > 0)
+                        correctIndices = configured;
+                }
+
+                var percentages = new int[numberOfChoices];
+                var basePercent = 100 / numberOfChoices;
+                var remainder = 100 % numberOfChoices;
+
+                for (int i = 0; i < numberOfChoices; i++)
+                    percentages[i] = basePercent + (i < remainder ? 1 : 0);
+
+                Debug.WriteLine($"[ThisAddIn] Creating QuizResultsForm with sample data - {numberOfChoices} choices");
+
+                _activeQuizResultsForm = new ClassPointAddIn.Views.Quizzes.QuizResultsForm(percentages, correctIndices);
+                _activeQuizResultsForm.FormClosed += (s, e) => _activeQuizResultsForm = null;
+
+                Debug.WriteLine("[ThisAddIn] Calling ShowDialog() for sample data...");
+                ShowAndActivateForm(_activeQuizResultsForm);
+                Debug.WriteLine("[ThisAddIn] ShowDialog() completed for sample data");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ThisAddIn] ShowQuizResultsDialogAsync Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[ThisAddIn] Stack trace: {ex.StackTrace}");
+            }
+        }
+
+        private async System.Threading.Tasks.Task ShowShortAnswerResultsAsync(int quizId, string questionText = null)
+        {
+            try
+            {
+                Debug.WriteLine($"[ThisAddIn] ======================================");
+                Debug.WriteLine($"[ThisAddIn] ShowShortAnswerResultsAsync START");
+                Debug.WriteLine($"[ThisAddIn] QuizId: {quizId}");
+                Debug.WriteLine($"[ThisAddIn] QuestionText: {questionText ?? "(null)"}");
+                Debug.WriteLine($"[ThisAddIn] Thread ID: {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+                Debug.WriteLine($"[ThisAddIn] ======================================");
+
+                // Check if dialog is already open for the same quiz
+                if (_activeShortAnswerResultsForm != null && !_activeShortAnswerResultsForm.IsDisposed)
+                {
+                    if (_activeShortAnswerResultsForm.QuizId == quizId)
+                    {
+                        Debug.WriteLine("[ThisAddIn] Short answer results dialog already open - bringing to front");
+                        _activeShortAnswerResultsForm.BringToFront();
+                        _activeShortAnswerResultsForm.Activate();
+                        return;
+                    }
+                    else
+                    {
+                        Debug.WriteLine("[ThisAddIn] Closing old short answer results dialog");
+                        _activeShortAnswerResultsForm.Close();
+                        _activeShortAnswerResultsForm = null;
+                    }
+                }
+
+                // Fetch quiz details and submissions from API
+                Debug.WriteLine("[ThisAddIn] Creating QuizApiService instance");
+                var quizService = new Api.Services.QuizService.QuizApiService();
+
+                // Get quiz details if we don't have the question text
+                if (string.IsNullOrEmpty(questionText))
+                {
+                    Debug.WriteLine("[ThisAddIn] QuestionText is empty, fetching quiz details from API");
+                    var quizDetails = await quizService.GetQuizAsync(quizId);
+                    Debug.WriteLine($"[ThisAddIn] Quiz details received: {quizDetails != null}");
+                    questionText = quizDetails?.Properties?.QuestionText ?? "Short Answer Question";
+                    Debug.WriteLine($"[ThisAddIn] QuestionText resolved to: {questionText}");
+                }
+
+                // Fetch actual submissions from API
+                Debug.WriteLine("[ThisAddIn] Fetching short answer submissions from API");
+                var stats = await quizService.GetShortAnswerStatsAsync(quizId);
+                Debug.WriteLine($"[ThisAddIn] Stats received: {stats != null}");
+                
+                var submissions = new List<ShortAnswerSubmission>();
+                int totalSubmissions = 0;
+                int enrolledStudents = 0;
+
+                if (stats != null)
+                {
+                    Debug.WriteLine($"[ThisAddIn] Got stats - Submissions: {stats.Submissions?.Count ?? 0}, Enrolled: {stats.EnrolledStudents}");
+                    
+                    // Map API response to ShortAnswerSubmission objects
+                    submissions = stats.Submissions?.Select(s => new ShortAnswerSubmission
+                    {
+                        SubmissionId = s.Id,
+                        StudentName = s.StudentName,
+                        AnswerText = s.Answer,
+                        SubmittedAt = DateTime.TryParse(s.SubmittedAt, out var submittedDate) ? submittedDate : DateTime.Now,
+                        IsLiked = s.IsLiked
+                    }).ToList() ?? new List<ShortAnswerSubmission>();
+                    
+                    totalSubmissions = stats.TotalSubmissions;
+                    enrolledStudents = stats.EnrolledStudents;
+                    
+                    // Use question text from API if not provided
+                    if (string.IsNullOrEmpty(questionText))
+                    {
+                        questionText = stats.QuestionText ?? "Short Answer Question";
+                    }
+                    
+                    Debug.WriteLine($"[ThisAddIn] Mapped {submissions.Count} submissions");
+                }
+                else
+                {
+                    Debug.WriteLine("[ThisAddIn] No stats returned from API - using empty submission list");
+                }
+
+                Debug.WriteLine("[ThisAddIn] Creating ShortAnswerResultsForm instance");
+                Debug.WriteLine($"[ThisAddIn] Parameters - QuizId: {quizId}, Question: {questionText}, Submissions: {submissions.Count}, Total: {totalSubmissions}, Enrolled: {enrolledStudents}");
+                
+                _activeShortAnswerResultsForm = new ShortAnswerResultsForm(
+                   quizId,
+                    questionText,
+                 submissions,
+                 totalSubmissions,
+                   enrolledStudents);
+
+                Debug.WriteLine("[ThisAddIn] Form created successfully");
+                _activeShortAnswerResultsForm.FormClosed += (s, e) => 
+                {
+                    Debug.WriteLine("[ThisAddIn] Short answer results form closed event");
+                    _activeShortAnswerResultsForm = null;
+                };
+
+                Debug.WriteLine("[ThisAddIn] Calling ShowAndActivateForm");
+                ShowAndActivateForm(_activeShortAnswerResultsForm);
+                Debug.WriteLine("[ThisAddIn] ShowAndActivateForm returned");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[ThisAddIn] ======================================");
+                Debug.WriteLine($"[ThisAddIn] ShowShortAnswerResultsAsync ERROR");
+                Debug.WriteLine($"[ThisAddIn] Message: {ex.Message}");
+                Debug.WriteLine($"[ThisAddIn] Stack trace: {ex.StackTrace}");
+                if (ex.InnerException != null)
+                {
+                    Debug.WriteLine($"[ThisAddIn] Inner exception: {ex.InnerException.Message}");
+                    Debug.WriteLine($"[ThisAddIn] Inner stack trace: {ex.InnerException.StackTrace}");
+                }
+                Debug.WriteLine($"[ThisAddIn] ======================================");
+                System.Windows.Forms.MessageBox.Show($"Error showing short answer results: {ex.Message}\n\nSee debug output for details.", "Error");
+            }
+        }
+
+        // Public method that can be called from the ribbon
+        public void ShowQuizResultsForButton(int quizId)
+        {
+            Debug.WriteLine($"[ThisAddIn] ShowQuizResultsForButton called with Quiz ID: {quizId}");
+            ShowQuizResultsDialogAsync(quizId);
+        }
+
         public void HideQuizTaskPane()
         {
             try
@@ -182,6 +562,8 @@ namespace ClassPointAddIn
         {
             try
             {
+                Debug.WriteLine($"[ThisAddIn] Startup - Thread: {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+
                 Debug.WriteLine("ThisAddIn_Startup: Starting up...");
 
                 // Hook into PowerPoint events
@@ -191,8 +573,12 @@ namespace ClassPointAddIn
                 // Hook into slideshow events
                 Application.SlideShowBegin += Application_SlideShowBegin;
                 Application.SlideShowEnd += Application_SlideShowEnd;
-                Application.SlideShowNextClick += Application_SlideShowNextClick; // <--- add this line
+                Application.SlideShowNextClick += Application_SlideShowNextClick;
                 Application.WindowSelectionChange += Application_WindowSelectionChange;
+
+                // Hook into window activation to detect clicks
+                Application.WindowActivate += Application_WindowActivate;
+
                 // Initialize class API service
                 _classApiService = new ClassApiService();
 
@@ -202,6 +588,62 @@ namespace ClassPointAddIn
             {
                 Debug.WriteLine($"ThisAddIn_Startup Error: {ex.Message}");
                 System.Windows.Forms.MessageBox.Show($"Add-in startup error: {ex.Message}", "Error");
+            }
+        }
+
+        private void Application_WindowActivate(Microsoft.Office.Interop.PowerPoint.Presentation Pres, Microsoft.Office.Interop.PowerPoint.DocumentWindow Wn)
+        {
+            try
+            {
+                // Check if a shape is selected when window is activated (e.g., after clicking)
+                if (Wn.Selection.Type == Microsoft.Office.Interop.PowerPoint.PpSelectionType.ppSelectionShapes)
+                {
+                    CheckAndShowQuizButtonDialog(Wn.Selection);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Application_WindowActivate Error: {ex.Message}");
+            }
+        }
+
+        private void CheckAndShowQuizButtonDialog(Microsoft.Office.Interop.PowerPoint.Selection selection)
+        {
+            try
+            {
+                foreach (Microsoft.Office.Interop.PowerPoint.Shape shape in selection.ShapeRange)
+                {
+                    bool isQuizButton = false;
+                    int quizId = 0;
+
+                    try
+                    {
+                        for (int i = 1; i <= shape.Tags.Count; i++)
+                        {
+                            // Check for ANY quiz button type
+                            if (shape.Tags.Name(i).Equals("QuizButton", StringComparison.OrdinalIgnoreCase))
+                            {
+                                isQuizButton = true;
+                            }
+                            if (shape.Tags.Name(i).Equals("QuizId", StringComparison.OrdinalIgnoreCase))
+                            {
+                                int.TryParse(shape.Tags.Value(i), out quizId);
+                            }
+                        }
+                    }
+                    catch { }
+
+                    if (isQuizButton)
+                    {
+                        Debug.WriteLine($"Quiz button detected - Quiz ID: {quizId}");
+                        ShowQuizResultsDialogAsync(quizId);
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"CheckAndShowQuizButtonDialog Error: {ex.Message}");
             }
         }
         private void Application_SlideShowOnNext(
@@ -218,8 +660,8 @@ namespace ClassPointAddIn
                 // Detect quiz shape by tag
                 for (int i = 1; i <= clickedShape.Tags.Count; i++)
                 {
-                    if (clickedShape.Tags.Name(i) == "QuizButton" &&
-                        clickedShape.Tags.Value(i) == "MultiChoiceQuiz")
+                    // Check for ANY quiz button type
+                    if (clickedShape.Tags.Name(i) == "QuizButton")
                     {
                         ShowQuizResultFromTaskPane();
                         return;
@@ -418,7 +860,7 @@ namespace ClassPointAddIn
                     // Show code using PowerPoint native display
                     if (!string.IsNullOrEmpty(_currentClassCode))
                     {
-                        _activePowerPointDisplay = new PowerPointCodeDisplay(_currentClassCode, CurrentCourseName);
+                        _activePowerPointDisplay = new PowerPointCodeDisplay(_currentClassCode, CurrentCourseName, 0, _currentClassId ?? 0);
                         _activePowerPointDisplay.Show();
                         Debug.WriteLine("PowerPoint code display is now visible");
                     }
@@ -703,6 +1145,286 @@ namespace ClassPointAddIn
         public int? CurrentClassId => _currentClassId;
         public string CurrentClassCode => _currentClassCode; // Expose the actual class code
 
+        public void AddQuizButtonToSlideWithQuizId(int quizId, string quizTitle, string quizType = "MultipleChoice")
+        {
+            try
+            {
+                var application = Application;
+                var presentation = application.ActivePresentation;
+                var slide = (Microsoft.Office.Interop.PowerPoint.Slide)application.ActiveWindow.View.Slide;
+
+                // Determine the tag value based on quiz type
+                string quizTypeTag = quizType == "ShortAnswer" ? "ShortAnswerQuiz" : "MultiChoiceQuiz";
+
+                // Check if a quiz button already exists on this slide
+                Microsoft.Office.Interop.PowerPoint.Shape existingQuizButton = null;
+                try
+                {
+                    foreach (Microsoft.Office.Interop.PowerPoint.Shape shape in slide.Shapes)
+                    {
+                        try
+                        {
+                            for (int i = 1; i <= shape.Tags.Count; i++)
+                            {
+                                if (shape.Tags.Name(i).Equals("QuizButton", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    existingQuizButton = shape;
+                                    break;
+                                }
+                            }
+                            if (existingQuizButton != null) break;
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+
+                if (existingQuizButton != null)
+                {
+                    // Update the existing button with the quiz ID and type
+                    existingQuizButton.Tags.Add("QuizId", quizId.ToString());
+                    existingQuizButton.Tags.Add("QuizType", quizTypeTag);
+                    existingQuizButton.TextFrame.TextRange.Text = $"📋 {quizTitle}";
+
+                    // Ensure action setting is configured for slideshow clicks
+                    try
+                    {
+                        existingQuizButton.ActionSettings[Microsoft.Office.Interop.PowerPoint.PpMouseActivation.ppMouseClick].Action =
+                            Microsoft.Office.Interop.PowerPoint.PpActionType.ppActionNone;
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Failed to add action setting to existing button: {ex.Message}");
+                    }
+
+                    return;
+                }
+
+                // Create a new quiz button if none exists
+                var quizButton = slide.Shapes.AddShape(
+                    Microsoft.Office.Core.MsoAutoShapeType.msoShapeRoundedRectangle,
+                    100, 50, 120, 40);
+
+                quizButton.Fill.ForeColor.RGB = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.FromArgb(0, 120, 215));
+                quizButton.Line.ForeColor.RGB = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.FromArgb(0, 100, 180));
+                quizButton.Line.Weight = 2;
+                quizButton.Shadow.Type = Microsoft.Office.Core.MsoShadowType.msoShadow6;
+
+                quizButton.TextFrame.TextRange.Text = $"📋 {quizTitle}";
+                quizButton.TextFrame.TextRange.Font.Name = "Segoe UI";
+                quizButton.TextFrame.TextRange.Font.Size = 12;
+                quizButton.TextFrame.TextRange.Font.Bold = Microsoft.Office.Core.MsoTriState.msoTrue;
+                quizButton.TextFrame.TextRange.Font.Color.RGB = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.White);
+                quizButton.TextFrame.TextRange.ParagraphFormat.Alignment = Microsoft.Office.Interop.PowerPoint.PpParagraphAlignment.ppAlignCenter;
+                quizButton.TextFrame.VerticalAnchor = Microsoft.Office.Core.MsoVerticalAnchor.msoAnchorMiddle;
+
+                quizButton.Name = $"QuizButton_{System.Guid.NewGuid().ToString("N").Substring(0, 8)}";
+                quizButton.Tags.Add("QuizButton", quizTypeTag);
+                quizButton.Tags.Add("ButtonType", "QuizControl");
+                quizButton.Tags.Add("QuizId", quizId.ToString());
+                quizButton.Tags.Add("QuizType", quizTypeTag);
+
+                Debug.WriteLine($"=== Quiz Button Created ===");
+                Debug.WriteLine($"Button Name: {quizButton.Name}");
+                Debug.WriteLine($"Tags added: QuizButton={quizTypeTag}, ButtonType=QuizControl, QuizId={quizId}, QuizType={quizTypeTag}");
+                Debug.WriteLine($"Total tag count: {quizButton.Tags.Count}");
+
+                // Verify tags were added
+                for (int i = 1; i <= quizButton.Tags.Count; i++)
+                {
+                    Debug.WriteLine($"Tag {i}: {quizButton.Tags.Name(i)} = {quizButton.Tags.Value(i)}");
+                }
+                Debug.WriteLine($"=== End Quiz Button Creation ===");
+
+                // Add double-click action to show statistics dialog
+                try
+                {
+                    // Store reference for the click handler
+                    var buttonName = quizButton.Name;
+                    var buttonQuizId = quizId;
+
+                    Debug.WriteLine($"Quiz button created with name: {buttonName}, Quiz ID: {buttonQuizId}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Failed to configure button actions: {ex.Message}");
+                }
+
+                // Add action setting to make button clickable in slideshow
+                try
+                {
+                    quizButton.ActionSettings[Microsoft.Office.Interop.PowerPoint.PpMouseActivation.ppMouseClick].Action =
+                        Microsoft.Office.Interop.PowerPoint.PpActionType.ppActionNone;
+
+                    Debug.WriteLine($"Action setting added to quiz button");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Failed to add action setting or animation: {ex.Message}");
+                    Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                }
+
+                Debug.WriteLine($"Added quiz button with quiz ID: {quizId}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"AddQuizButtonToSlideWithQuizId Error: {ex.Message}");
+                System.Windows.Forms.MessageBox.Show($"Error adding quiz button: {ex.Message}", "Error");
+            }
+        }
+
+        /// <summary>
+        /// Checks for quiz buttons that have been deleted from slides and removes the corresponding quizzes from the database.
+        /// </summary>
+        public async System.Threading.Tasks.Task CleanupDeletedQuizButtonsAsync()
+        {
+            try
+            {
+                if (!IsTeacherLoggedIn || !CurrentCourseId.HasValue)
+                {
+                    Debug.WriteLine("CleanupDeletedQuizButtons: No active course");
+                    System.Windows.Forms.MessageBox.Show(
+                        "No active course. Please open a presentation first.",
+                        "Cleanup Quiz Buttons",
+                        System.Windows.Forms.MessageBoxButtons.OK,
+                        System.Windows.Forms.MessageBoxIcon.Warning);
+                    return;
+                }
+
+                if (!HasActivePresentation())
+                {
+                    Debug.WriteLine("CleanupDeletedQuizButtons: No active presentation");
+                    System.Windows.Forms.MessageBox.Show(
+                        "No active presentation. Please open a presentation first.",
+                        "Cleanup Quiz Buttons",
+                        System.Windows.Forms.MessageBoxButtons.OK,
+                        System.Windows.Forms.MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // Collect all quiz IDs from quiz buttons in the presentation
+                var activeQuizIds = new HashSet<int>();
+                var presentation = Application.ActivePresentation;
+
+                foreach (Microsoft.Office.Interop.PowerPoint.Slide slide in presentation.Slides)
+                {
+                    foreach (Microsoft.Office.Interop.PowerPoint.Shape shape in slide.Shapes)
+                    {
+                        try
+                        {
+                            bool isQuizButton = false;
+                            int quizId = 0;
+
+                            for (int i = 1; i <= shape.Tags.Count; i++)
+                            {
+                                var tagName = shape.Tags.Name(i);
+                                var tagValue = shape.Tags.Value(i);
+
+                                // Check for ANY quiz button type
+                                if (tagName.Equals("QuizButton", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    isQuizButton = true;
+                                }
+                                if (tagName.Equals("QuizId", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    int.TryParse(tagValue, out quizId);
+                                }
+                            }
+
+                            if (isQuizButton && quizId > 0)
+                            {
+                                activeQuizIds.Add(quizId);
+                                Debug.WriteLine($"Found quiz button with Quiz ID: {quizId} on slide {slide.SlideIndex}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Error checking shape tags: {ex.Message}");
+                        }
+                    }
+                }
+
+                Debug.WriteLine($"Total active quiz buttons found: {activeQuizIds.Count}");
+
+                // Fetch all quizzes for the current course
+                var quizService = new Api.Services.QuizService.QuizApiService();
+                var courseQuizzes = await quizService.GetQuizzesForCourseAsync(CurrentCourseId.Value);
+
+                // Find quizzes that don't have corresponding buttons (orphaned quizzes)
+                var orphanedQuizzes = courseQuizzes.Where(q => !activeQuizIds.Contains(q.Id)).ToList();
+
+                Debug.WriteLine($"Found {orphanedQuizzes.Count} orphaned quizzes");
+
+                if (orphanedQuizzes.Count == 0)
+                {
+                    System.Windows.Forms.MessageBox.Show(
+                        "No orphaned quizzes found. All quizzes have corresponding buttons in the presentation.",
+                        "Cleanup Complete",
+                        System.Windows.Forms.MessageBoxButtons.OK,
+                        System.Windows.Forms.MessageBoxIcon.Information);
+                    return;
+                }
+
+                // Ask user for confirmation
+                var orphanedTitles = string.Join("\n", orphanedQuizzes.Select(q => $"• {q.Title}"));
+                var confirmResult = System.Windows.Forms.MessageBox.Show(
+                    $"Found {orphanedQuizzes.Count} quiz(es) without buttons:\n\n{orphanedTitles}\n\nDo you want to delete these quizzes?",
+                    "Delete Orphaned Quizzes",
+                    System.Windows.Forms.MessageBoxButtons.YesNo,
+                    System.Windows.Forms.MessageBoxIcon.Question);
+
+                if (confirmResult != System.Windows.Forms.DialogResult.Yes)
+                {
+                    Debug.WriteLine("User cancelled cleanup");
+                    return;
+                }
+
+                // Delete orphaned quizzes
+                int successCount = 0;
+                int failCount = 0;
+                foreach (var quiz in orphanedQuizzes)
+                {
+                    try
+                    {
+                        var success = await quizService.DeleteQuizAsync(quiz.Id);
+                        if (success)
+                        {
+                            successCount++;
+                            Debug.WriteLine($"Deleted quiz: {quiz.Title} (ID: {quiz.Id})");
+                        }
+                        else
+                        {
+                            failCount++;
+                            Debug.WriteLine($"Failed to delete quiz: {quiz.Title} (ID: {quiz.Id})");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        failCount++;
+                        Debug.WriteLine($"Error deleting quiz {quiz.Id}: {ex.Message}");
+                    }
+                }
+
+                // Show results
+                var message = $"Cleanup complete!\n\nDeleted: {successCount} quiz(es)";
+                if (failCount > 0)
+                {
+                    message += $"\nFailed: {failCount} quiz(es)";
+                }
+
+                System.Windows.Forms.MessageBox.Show(
+                    message,
+                    "Cleanup Complete",
+                    System.Windows.Forms.MessageBoxButtons.OK,
+                    failCount > 0 ? System.Windows.Forms.MessageBoxIcon.Warning : System.Windows.Forms.MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"CleanupDeletedQuizButtons Error: {ex.Message}");
+                System.Windows.Forms.MessageBox.Show($"Error cleaning up deleted quiz buttons: {ex.Message}", "Error");
+            }
+        }
+
         #endregion
 
         #region VSTO generated code
@@ -719,7 +1441,7 @@ namespace ClassPointAddIn
 
         #endregion
 
-        private void Application_SlideShowNextClick(Microsoft.Office.Interop.PowerPoint.SlideShowWindow Wn, Microsoft.Office.Interop.PowerPoint.Effect n)
+        private async void Application_SlideShowNextClick(Microsoft.Office.Interop.PowerPoint.SlideShowWindow Wn, Microsoft.Office.Interop.PowerPoint.Effect n)
         {
             try
             {
@@ -729,14 +1451,27 @@ namespace ClassPointAddIn
                 if (clickedShape == null) return;
 
                 bool isQuizButton = false;
+                int quizId = 0;
+                string quizType = null;
+
                 try
                 {
                     for (int i = 1; i <= clickedShape.Tags.Count; i++)
                     {
-                        if (clickedShape.Tags.Name(i) == "QuizButton" && clickedShape.Tags.Value(i) == "MultiChoiceQuiz")
+                        var tagName = clickedShape.Tags.Name(i);
+                        var tagValue = clickedShape.Tags.Value(i);
+
+                        if (tagName.Equals("QuizButton", StringComparison.OrdinalIgnoreCase))
                         {
                             isQuizButton = true;
-                            break;
+                        }
+                        if (tagName.Equals("QuizId", StringComparison.OrdinalIgnoreCase))
+                        {
+                            int.TryParse(tagValue, out quizId);
+                        }
+                        if (tagName.Equals("QuizType", StringComparison.OrdinalIgnoreCase))
+                        {
+                            quizType = tagValue;
                         }
                     }
                 }
@@ -747,50 +1482,134 @@ namespace ClassPointAddIn
 
                 if (!isQuizButton) return;
 
-                // Prepare data from task pane if available
-                int numberOfChoices = 4;
-                List<int> correctIndices = new List<int> { 0 };
+                System.Diagnostics.Debug.WriteLine($"Quiz button clicked in slideshow - Quiz ID: {quizId}, Type: {quizType}");
 
-                try
-                {
-                    if (_quizTaskPaneControl != null)
-                    {
-                        numberOfChoices = _quizTaskPaneControl.GetNumberOfChoices();
-                        var configuredCorrect = _quizTaskPaneControl.GetCorrectAnswerIndices();
-                        if (configuredCorrect != null && configuredCorrect.Count > 0)
-                            correctIndices = configuredCorrect;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Error reading task pane settings for results dialog: {ex.Message}");
-                }
-
-                // Build sample percentages (even split) — replace with real API call if you have live data
-                var percentages = new int[numberOfChoices];
-                var basePercent = 100 / Math.Max(1, numberOfChoices);
-                var remainder = 100 % Math.Max(1, numberOfChoices);
-                for (int i = 0; i < numberOfChoices; i++)
-                {
-                    percentages[i] = basePercent + (i < remainder ? 1 : 0);
-                }
-
-                try
-                {
-                    using (var dlg = new ClassPointAddIn.Views.Quizzes.QuizResultsForm(percentages, correctIndices))
-                    {
-                        // Modal dialog is appropriate in slideshow to ensure user sees results
-                        dlg.ShowDialog();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Failed to show quiz results dialog: {ex.Message}");
-                }
+                // Show quiz results with real data
+                await ShowQuizResultsInSlideshowAsync(quizId);
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Application_SlideShowNextClick Error: {ex.Message}");
+            }
+        }
+
+        private async System.Threading.Tasks.Task ShowQuizResultsInSlideshowAsync(int quizId)
+        {
+            try
+            {
+                Debug.WriteLine($"[ThisAddIn] ======================================");
+                Debug.WriteLine($"[ThisAddIn] ShowQuizResultsInSlideshowAsync START");
+                Debug.WriteLine($"[ThisAddIn] QuizId: {quizId}");
+                Debug.WriteLine($"[ThisAddIn] ======================================");
+                
+                if (quizId > 0)
+                {
+                    // First, get quiz details to determine quiz type
+                    Debug.WriteLine("[ThisAddIn] Fetching quiz details to determine quiz type in slideshow...");
+                    var quizService = new Api.Services.QuizService.QuizApiService();
+                    var quizDetails = await quizService.GetQuizAsync(quizId).ConfigureAwait(true);
+
+                    Debug.WriteLine($"[ThisAddIn] Quiz details received: {quizDetails != null}");
+                    Debug.WriteLine($"[ThisAddIn] Quiz type in slideshow: {quizDetails?.QuizType ?? "(null)"}");
+
+                    // Check if this is a short answer quiz
+                    if (quizDetails != null && quizDetails.QuizType == "short_answer")
+                    {
+                        Debug.WriteLine("[ThisAddIn] *** DETECTED SHORT ANSWER QUIZ ***");
+                        Debug.WriteLine("[ThisAddIn] Calling ShowShortAnswerResultsAsync");
+                        await ShowShortAnswerResultsAsync(quizId, quizDetails.Properties?.QuestionText ?? "Short Answer Question");
+                        Debug.WriteLine("[ThisAddIn] ShowShortAnswerResultsAsync returned");
+                        return;
+                    }
+                }
+
+                // Check if dialog is already open - prevent multiple instances
+                if (_activeQuizResultsForm != null && !_activeQuizResultsForm.IsDisposed)
+                {
+                    Debug.WriteLine("Quiz results dialog already open in slideshow - bringing to front");
+
+                    // Use Invoke to ensure it happens on the correct thread
+                    if (_activeQuizResultsForm.InvokeRequired)
+                    {
+                        _activeQuizResultsForm.Invoke(new Action(() =>
+                        {
+                            if (!_activeQuizResultsForm.IsDisposed)
+                            {
+                                _activeQuizResultsForm.BringToFront();
+                                _activeQuizResultsForm.Activate();
+                            }
+                        }));
+                    }
+                    else
+                    {
+                        _activeQuizResultsForm.BringToFront();
+                        _activeQuizResultsForm.Activate();
+                    }
+                    return;
+                }
+
+                if (quizId > 0)
+                {
+                    // Fetch real submission data from API (for multiple choice)
+                    var quizService = new Api.Services.QuizService.QuizApiService();
+                    var stats = await quizService.GetQuizSubmissionStatsAsync(quizId);
+
+                    if (stats != null && stats.ChoiceStats != null)
+                    {
+                        var percentages = stats.ChoiceStats.Select(c => c.Percentage).ToArray();
+                        var submissionCounts = stats.ChoiceStats.Select(c => c.Count).ToArray();
+                        var labels = stats.ChoiceStats.Select(c => c.Label).ToList();
+                        var correctIndicesData = stats.ChoiceStats
+                            .Where(c => c.IsCorrect)
+                            .Select(c => c.Index)
+                            .ToList();
+                        var studentNamesPerChoice = stats.ChoiceStats.Select(c => c.Students ?? new List<string>()).ToList();
+
+                        _activeQuizResultsForm = new ClassPointAddIn.Views.Quizzes.QuizResultsForm(
+                            percentages,
+                            correctIndicesData,
+                            labels,
+                            submissionCounts,
+                            stats.TotalSubmissions,
+                            studentNamesPerChoice,
+                            quizId,
+                            stats.EnrolledStudents);
+
+                        _activeQuizResultsForm.FormClosed += (s, e) => _activeQuizResultsForm = null;
+                        ShowAndActivateForm(_activeQuizResultsForm);
+
+                        return;
+                    }
+                }
+
+                // Fallback to sample data if no quiz ID or API call failed
+                int numberOfChoices = 4;
+                List<int> correctIndices = new List<int> { 0 };
+
+                if (_quizTaskPaneControl != null)
+                {
+                    numberOfChoices = _quizTaskPaneControl.GetNumberOfChoices();
+                    var configured = _quizTaskPaneControl.GetCorrectAnswerIndices();
+                    if (configured != null && configured.Count > 0)
+                        correctIndices = configured;
+                }
+
+                var percentagesData = new int[numberOfChoices];
+                var basePercent = 100 / Math.Max(1, numberOfChoices);
+                var remainder = 100 % Math.Max(1, numberOfChoices);
+                for (int i = 0; i < numberOfChoices; i++)
+                {
+                    percentagesData[i] = basePercent + (i < remainder ? 1 : 0);
+                }
+
+                _activeQuizResultsForm = new ClassPointAddIn.Views.Quizzes.QuizResultsForm(percentagesData, correctIndices);
+                _activeQuizResultsForm.FormClosed += (s, e) => _activeQuizResultsForm = null;
+                ShowAndActivateForm(_activeQuizResultsForm);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ShowQuizResultsInSlideshowAsync Error: {ex.Message}");
+                System.Windows.Forms.MessageBox.Show($"Error loading quiz results: {ex.Message}", "Error");
             }
         }
     }

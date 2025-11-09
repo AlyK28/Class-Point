@@ -2,40 +2,81 @@
 	<ribbon>
 		<tabs>
 
-			<tab id="tabConnect" label="Connect" getVisible="GetConnectVisible">
-				<group id="grpConnect" label="Login">
+			<!-- Login Tab - Only visible when not logged in -->
+			<tab id="tabConnect" label="ClassPoint" getVisible="GetConnectVisible">
+				<group id="grpConnect" label="Get Started">
 					<button id="btnConnect"
-							label="Connect"
+							label="Login"
 							size="large"
-							imageMso="FileNew"
+							imageMso="AccountManagement"
 							onAction="OnConnectClick"/>
 				</group>
 			</tab>
 
-			<tab id="tabTeacher" label="Teacher" getVisible="GetTeacherVisible">
-				<group id="grpTeacher" label="Account">
+			<!-- Main ClassPoint Tab - Only visible when logged in -->
+			<tab id="tabTeacher" label="ClassPoint" getVisible="GetTeacherVisible">
+				
+				<!-- Account Management Group -->
+				<group id="grpAccount" label="Account">
 					<button id="btnLogout"
 							label="Logout"
 							size="large"
-							imageMso="FileClose"
+							imageMso="SignOut"
 							onAction="OnLogoutClick"/>
 				</group>
-				<group id="grpPresentation" label="Presentation">
-					<button id="btnStartSlideshow"
-							label="Start Slideshow"
+
+				<!-- Class Session Group -->
+				<group id="grpClass" label="Class Session">
+					<button id="btnStartClass"
+							label="Start Class"
 							size="large"
-							imageMso="FileOpen"
+							imageMso="PresentationStart"
 							onAction="OnStartSlideshowClick"
-							getEnabled="GetStartSlideshowEnabled"/>
+							getEnabled="GetStartSlideshowEnabled"
+							screentip="Start a new class session"
+							supertip="Start a class session to allow students to join and participate in activities"/>
 				</group>
-				<group id="grpQuizzes" label="Quizzes">
-					<button id="btnQuizPanel"
-							label="MultiChoice Quiz"
+
+				<!-- Interactive Quizzes Group -->
+				<group id="grpQuizzes" label="Interactive Quizzes">
+					<button id="btnMultipleChoice"
+							label="Multiple Choice"
 							size="large"
-							imageMso="PaneInsert"
+							imageMso="TableStyleMedium16"
 							onAction="OnQuizPanelClick"
-							getEnabled="GetQuizEnabled"/>
+							getEnabled="GetQuizEnabled"
+							screentip="Create Multiple Choice Quiz"
+							supertip="Add a multiple choice quiz button to your slide with customizable options"/>
+					<button id="btnShortAnswer"
+							label="Short Answer"
+							size="large"
+							imageMso="ViewNotesPageView"
+							onAction="OnShortAnswerQuizClick"
+							getEnabled="GetQuizEnabled"
+							screentip="Create Short Answer Quiz"
+							supertip="Add a short answer quiz where students type their responses"/>
 				</group>
+
+				<!-- Quiz Management Group -->
+				<group id="grpQuizManagement" label="Quiz Management">
+					<button id="btnViewResults"
+							label="View Results"
+							size="large"
+							imageMso="ChartInsert"
+							onAction="OnShowQuizStatsClick"
+							getEnabled="GetQuizEnabled"
+							screentip="View Quiz Results"
+							supertip="Select a quiz button on your slide and click to view student responses and statistics"/>
+					<button id="btnCleanupQuizzes"
+							label="Cleanup Deleted"
+							size="normal"
+							imageMso="RecordsDeleteRecord"
+							onAction="OnCleanupQuizzesClick"
+							getEnabled="GetQuizEnabled"
+							screentip="Remove Deleted Quiz Buttons"
+							supertip="Remove quiz buttons from slides where the quiz has been deleted from the system"/>
+				</group>
+
 			</tab>
 
 		</tabs>

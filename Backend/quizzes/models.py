@@ -43,6 +43,9 @@ class Quiz(models.Model):
 
     # Type-specific properties stored as flexible JSON
     properties = models.JSONField(default=dict)
+    
+    # Track if quiz is accepting submissions
+    is_active = models.BooleanField(default=True, help_text="If False, quiz no longer accepts submissions")
 
     class Meta:
         ordering = ['-created_at']

@@ -76,6 +76,24 @@
                 });
             }
 
+            protected async Task DeleteAsync(string endpoint)
+            {
+                ApplyAuthorizationHeader();
+                var response = await _httpClient.DeleteAsync(endpoint);
+
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && await TryRefreshTokenAsync())
+                {
+                    ApplyAuthorizationHeader();
+                    response = await _httpClient.DeleteAsync(endpoint); // retry once
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var json = await response.Content.ReadAsStringAsync();
+                    throw new Exception($"Delete request failed: {response.StatusCode} - {json}");
+                }
+            }
+
             private async Task<TResponse> SendAsync<TResponse>(Func<Task<HttpResponseMessage>> send)
             {
                 ApplyAuthorizationHeader();

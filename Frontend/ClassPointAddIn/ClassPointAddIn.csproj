@@ -242,6 +242,24 @@
     <Compile Include="Views\Quizzes\QuizResultsForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Views\ShortAnswerTaskPane.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Views\ShortAnswerTaskPane.Designer.cs">
+      <DependentUpon>ShortAnswerTaskPane.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Views\ShortAnswerResultsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Views\ShortAnswerResultsForm.Designer.cs">
+      <DependentUpon>ShortAnswerResultsForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Views\ShortAnswerDetailForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Views\ShortAnswerDetailForm.Designer.cs">
+      <DependentUpon>ShortAnswerDetailForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="Views\SimpleClassCodeDisplay.cs">
       <SubType>Form</SubType>
     </Compile>

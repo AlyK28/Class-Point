@@ -187,6 +187,17 @@ class StudentAnswerViewSet(viewsets.ModelViewSet):
         if isinstance(self.request.user, StudentUser):
             quiz_id = self.request.data.get('quiz_id')
             if quiz_id:
+                # Check if quiz is active (accepting submissions)
+                from quizzes.models import Quiz
+                try:
+                    quiz = Quiz.objects.get(id=quiz_id)
+                    if not quiz.is_active:
+                        from rest_framework.exceptions import ValidationError
+                        raise ValidationError({"error": "This quiz is no longer accepting submissions."})
+                except Quiz.DoesNotExist:
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError({"error": "Quiz not found."})
+                
                 # Get or create the submission for this student and quiz
                 submission, created = StudentQuizSubmission.objects.get_or_create(
                     student=self.request.user.student,

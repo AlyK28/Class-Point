@@ -166,10 +166,8 @@ namespace ClassPointAddIn.Views
                     }
                 }
 
-                // Add a movable quiz button to the current slide
-                AddQuizButtonToSlide();
-
                 // Show the quiz task pane for settings control
+                // Note: Quiz button will be added after saving the quiz with Save button
                 Globals.ThisAddIn.ShowQuizTaskPane();
 
                 // Refresh ribbon to update button states
@@ -181,6 +179,49 @@ namespace ClassPointAddIn.Views
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        public async void OnShortAnswerQuizClick(Office.IRibbonControl control)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"OnShortAnswerQuizClick: CurrentCourseId={Globals.ThisAddIn.CurrentCourseId}");
+
+                // Try to ensure we have a course
+                if (!Globals.ThisAddIn.CurrentCourseId.HasValue)
+                {
+                    System.Diagnostics.Debug.WriteLine("No current course, attempting to create one...");
+
+                    try
+                    {
+                        await Globals.ThisAddIn.EnsureCourseForCurrentPresentation();
+                        System.Diagnostics.Debug.WriteLine($"Course created/ensured: {Globals.ThisAddIn.CurrentCourseId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to create course: {ex.Message}");
+                        MessageBox.Show("Please ensure you have an active presentation with a course.\n\n" +
+                                       "If this problem persists, try:\n" +
+                                       "1. Close and reopen your presentation\n" +
+                                       "2. Log out and log back in\n\n" +
+                                       $"Error: {ex.Message}",
+                            "No Course", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
+
+                // Show the short answer task pane
+                Globals.ThisAddIn.ShowShortAnswerTaskPane();
+
+                // Refresh ribbon to update button states
+                ribbon?.Invalidate();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error opening short answer quiz: {ex.Message}",
+                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         // Helper: find an existing quiz button shape on a slide (returns null if none)
         private Microsoft.Office.Interop.PowerPoint.Shape FindExistingQuizButton(Microsoft.Office.Interop.PowerPoint.Slide slide)
         {
@@ -195,7 +236,8 @@ namespace ClassPointAddIn.Views
                         // Tags collection is 1-based
                         for (int i = 1; i <= shape.Tags.Count; i++)
                         {
-                            if (shape.Tags.Name(i) == "QuizButton" && shape.Tags.Value(i) == "MultiChoiceQuiz")
+                            if (shape.Tags.Name(i).Equals("QuizButton", StringComparison.OrdinalIgnoreCase) && 
+                                shape.Tags.Value(i).Equals("MultiChoiceQuiz", StringComparison.OrdinalIgnoreCase))
                             {
                                 return shape;
                             }
@@ -220,7 +262,7 @@ namespace ClassPointAddIn.Views
             {
                 var application = Globals.ThisAddIn.Application;
                 var presentation = application.ActivePresentation;
-                var slide = application.ActiveWindow.View.Slide;
+                var slide = (Microsoft.Office.Interop.PowerPoint.Slide)application.ActiveWindow.View.Slide;
 
                 // Check if a quiz button already exists on this slide
                 var existingQuizButton = FindExistingQuizButton(slide);
@@ -255,6 +297,38 @@ namespace ClassPointAddIn.Views
                 quizButton.Name = $"QuizButton_{System.Guid.NewGuid().ToString("N").Substring(0, 8)}";
                 quizButton.Tags.Add("QuizButton", "MultiChoiceQuiz");
                 quizButton.Tags.Add("ButtonType", "QuizControl");
+
+                // Add action setting to make button clickable in slideshow
+                try
+                {
+                    quizButton.ActionSettings[Microsoft.Office.Interop.PowerPoint.PpMouseActivation.ppMouseClick].Action = 
+                        Microsoft.Office.Interop.PowerPoint.PpActionType.ppActionNone;
+                    
+                    // Add an animation effect to trigger SlideShowNextClick event
+                    var timeline = slide.TimeLine;
+                    if (timeline != null)
+                    {
+                        var mainSequence = timeline.MainSequence;
+                        if (mainSequence != null)
+                        {
+                            var effect = mainSequence.AddEffect(
+                                quizButton,
+                                Microsoft.Office.Interop.PowerPoint.MsoAnimEffect.msoAnimEffectAppear,
+                                Microsoft.Office.Interop.PowerPoint.MsoAnimateByLevel.msoAnimateLevelNone,
+                                Microsoft.Office.Interop.PowerPoint.MsoAnimTriggerType.msoAnimTriggerOnPageClick);
+                            
+                            if (effect != null)
+                            {
+                                effect.Timing.TriggerType = Microsoft.Office.Interop.PowerPoint.MsoAnimTriggerType.msoAnimTriggerOnShapeClick;
+                                effect.Timing.TriggerShape = quizButton;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to add action setting or animation to quiz button: {ex.Message}");
+                }
 
                 // Add a click-triggered animation effect so SlideShowNextClick provides an Effect with .Shape
                 try
@@ -300,7 +374,7 @@ namespace ClassPointAddIn.Views
                         {
                             for (int i = 1; i <= shape.Tags.Count; i++)
                             {
-                                if (shape.Tags.Name(i) == "QuizButton" && shape.Tags.Value(i) == "MultiChoiceQuiz")
+                                if (shape.Tags.Name(i).Equals("QuizButton", StringComparison.OrdinalIgnoreCase) && shape.Tags.Value(i) == "MultiChoiceQuiz")
                                 {
                                     isQuizButton = true;
                                     break;
@@ -316,18 +390,44 @@ namespace ClassPointAddIn.Views
                             var seq = slide.TimeLine?.MainSequence;
                             if (seq != null)
                             {
-                                // Only add if no page-click effect exists for this shape
-                                bool hasClickEffect = false;
+                                // Check if this shape already has an effect
+                                bool hasEffect = false;
                                 foreach (Microsoft.Office.Interop.PowerPoint.Effect eff in seq)
                                 {
                                     try
                                     {
-
+                                        if (eff.Shape != null && eff.Shape.Name == shape.Name)
+                                        {
+                                            hasEffect = true;
+                                            break;
+                                        }
                                     }
                                     catch { }
                                 }
-
-
+                                
+                                if (!hasEffect)
+                                {
+                                    // Add animation effect to enable clicking
+                                    var effect = seq.AddEffect(
+                                        shape,
+                                        Microsoft.Office.Interop.PowerPoint.MsoAnimEffect.msoAnimEffectAppear,
+                                        Microsoft.Office.Interop.PowerPoint.MsoAnimateByLevel.msoAnimateLevelNone,
+                                        Microsoft.Office.Interop.PowerPoint.MsoAnimTriggerType.msoAnimTriggerOnPageClick);
+                                    
+                                    if (effect != null)
+                                    {
+                                        effect.Timing.TriggerType = Microsoft.Office.Interop.PowerPoint.MsoAnimTriggerType.msoAnimTriggerOnShapeClick;
+                                        effect.Timing.TriggerShape = shape;
+                                    }
+                                }
+                                
+                                // Ensure action setting is configured for slideshow clicks
+                                try
+                                {
+                                    shape.ActionSettings[Microsoft.Office.Interop.PowerPoint.PpMouseActivation.ppMouseClick].Action = 
+                                        Microsoft.Office.Interop.PowerPoint.PpActionType.ppActionNone;
+                                }
+                                catch { }
                             }
                         }
                         catch (Exception ex)
@@ -375,6 +475,105 @@ namespace ClassPointAddIn.Views
             catch (Exception ex)
             {
                 MessageBox.Show($"Error during logout: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        public void OnShowQuizStatsClick(Office.IRibbonControl control)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("=== OnShowQuizStatsClick Called ===");
+                
+                var application = Globals.ThisAddIn.Application;
+                
+                System.Diagnostics.Debug.WriteLine($"Selection Type: {application.ActiveWindow.Selection.Type}");
+                
+                // Check if a shape is selected
+                if (application.ActiveWindow.Selection.Type != Microsoft.Office.Interop.PowerPoint.PpSelectionType.ppSelectionShapes)
+                {
+                    MessageBox.Show("Please select a quiz button first.", "No Quiz Button Selected", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Number of shapes selected: {application.ActiveWindow.Selection.ShapeRange.Count}");
+
+                // Check each selected shape
+                foreach (Microsoft.Office.Interop.PowerPoint.Shape shape in application.ActiveWindow.Selection.ShapeRange)
+                {
+                    System.Diagnostics.Debug.WriteLine($"=== Examining Shape ===");
+                    System.Diagnostics.Debug.WriteLine($"Shape Name: {shape.Name}");
+                    System.Diagnostics.Debug.WriteLine($"Shape Type: {shape.Type}");
+                    System.Diagnostics.Debug.WriteLine($"Tag Count: {shape.Tags.Count}");
+                    
+                    bool isQuizButton = false;
+                    int quizId = 0;
+
+                    try
+                    {
+                        for (int i = 1; i <= shape.Tags.Count; i++)
+                        {
+                            var tagName = shape.Tags.Name(i);
+                            var tagValue = shape.Tags.Value(i);
+                            System.Diagnostics.Debug.WriteLine($"Tag {i}: {tagName} = {tagValue}");
+                            
+                            if (tagName.Equals("QuizButton", StringComparison.OrdinalIgnoreCase) && 
+                                tagValue.Equals("MultiChoiceQuiz", StringComparison.OrdinalIgnoreCase))
+                            {
+                                isQuizButton = true;
+                                System.Diagnostics.Debug.WriteLine(">>> QUIZ BUTTON DETECTED <<<");
+                            }
+                            if (tagName.Equals("QuizId", StringComparison.OrdinalIgnoreCase))
+                            {
+                                int.TryParse(tagValue, out quizId);
+                                System.Diagnostics.Debug.WriteLine($">>> QUIZ ID FOUND: {quizId} <<<");
+                            }
+                        }
+                    }
+                    catch (Exception tagEx)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error reading tags: {tagEx.Message}");
+                    }
+
+                    if (isQuizButton)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Quiz button found - Quiz ID: {quizId}");
+                        
+                        // Call the method to show quiz results
+                        Globals.ThisAddIn.ShowQuizResultsForButton(quizId);
+                        return;
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("Shape is NOT a quiz button");
+                    }
+                }
+
+                MessageBox.Show("The selected shape is not a quiz button.\n\nPlease select a quiz button to view statistics.", 
+                    "Not a Quiz Button", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    
+                System.Diagnostics.Debug.WriteLine("=== End OnShowQuizStatsClick ===");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ERROR in OnShowQuizStatsClick: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                MessageBox.Show($"Error showing quiz stats: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        public async void OnCleanupQuizzesClick(Office.IRibbonControl control)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("OnCleanupQuizzesClick: Starting cleanup...");
+                await Globals.ThisAddIn.CleanupDeletedQuizButtonsAsync();
+                System.Diagnostics.Debug.WriteLine("OnCleanupQuizzesClick: Cleanup completed");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ERROR in OnCleanupQuizzesClick: {ex.Message}");
+                MessageBox.Show($"Error cleaning up quizzes: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
