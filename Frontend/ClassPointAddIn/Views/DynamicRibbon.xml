@@ -30,7 +30,7 @@
 				</group>
 				<group id="grpQuizzes" label="Quizzes">
 					<button id="btnQuizPanel"
-							label="Quiz Manager"
+							label="MultiChoice Quiz"
 							size="large"
 							imageMso="PaneInsert"
 							onAction="OnQuizPanelClick"

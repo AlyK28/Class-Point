@@ -254,6 +254,12 @@ class MultipleChoiceAnswerSerializer(BaseStudentAnswerSerializer):
         # Store in answer_data
         data['answer_data'] = {'selected_choice_indices': selected_indices}
         return data
+    
+    def create(self, validated_data):
+        # Remove quiz_id and selected_choice_indices from validated_data since they're not model fields
+        validated_data.pop('quiz_id', None)
+        validated_data.pop('selected_choice_indices', None)
+        return super().create(validated_data)
 
 
 class DrawingAnswerSerializer(BaseStudentAnswerSerializer):

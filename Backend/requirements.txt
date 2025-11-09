@@ -11,3 +11,7 @@ Pillow==12.0.0
 gunicorn==23.0.0
 # Environment variables
 python-dotenv==1.1.1
+# CORS for frontend integration
+django-cors-headers==4.3.1
+# JWT for student tokens
+PyJWT==2.10.1

@@ -5,6 +5,7 @@ using ClassPointAddIn.Views.Quizzes;
 using Microsoft.Office.Interop.PowerPoint;
 using Microsoft.Office.Tools;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 
 namespace ClassPointAddIn
@@ -55,7 +56,92 @@ namespace ClassPointAddIn
                 System.Windows.Forms.MessageBox.Show($"Error showing quiz pane: {ex.Message}", "Error");
             }
         }
+        private void Application_WindowSelectionChange(Microsoft.Office.Interop.PowerPoint.Selection Sel)
+        {
+            try
+            {
+                // Check if the selection contains a quiz button
+                if (Sel.Type == Microsoft.Office.Interop.PowerPoint.PpSelectionType.ppSelectionShapes)
+                {
+                    foreach (Microsoft.Office.Interop.PowerPoint.Shape shape in Sel.ShapeRange)
+                    {
+                        // Check if this is a quiz button
+                        bool isQuizButton = false;
+                        try
+                        {
+                            for (int i = 1; i <= shape.Tags.Count; i++)
+                            {
+                                if (shape.Tags.Name(i) == "QuizButton" && shape.Tags.Value(i) == "MultiChoiceQuiz")
+                                {
+                                    isQuizButton = true;
+                                    break;
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            // Ignore tag access errors
+                        }
 
+                        if (isQuizButton)
+                        {
+                            System.Diagnostics.Debug.WriteLine("Quiz button selected - showing task pane");
+
+                            // Show the quiz task pane (existing behavior)
+                            ShowQuizTaskPane();
+
+                            // Prepare data for the results dialog.
+                            // Prefer real configured settings from the task pane if available; otherwise use sample data.
+                            int numberOfChoices = 4;
+                            List<int> correctIndices = new List<int> { 0 };
+
+                            try
+                            {
+                                if (_quizTaskPaneControl != null)
+                                {
+                                    numberOfChoices = _quizTaskPaneControl.GetNumberOfChoices();
+                                    var configuredCorrect = _quizTaskPaneControl.GetCorrectAnswerIndices();
+                                    if (configuredCorrect != null && configuredCorrect.Count > 0)
+                                        correctIndices = configuredCorrect;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Error reading task pane settings for results dialog: {ex.Message}");
+                            }
+
+                            // Build sample percentages (even split) — replace with real API data if available
+                            var percentages = new int[numberOfChoices];
+                            var basePercent = 100 / numberOfChoices;
+                            var remainder = 100 % numberOfChoices;
+                            for (int i = 0; i < numberOfChoices; i++)
+                            {
+                                percentages[i] = basePercent + (i < remainder ? 1 : 0);
+                            }
+
+                            // Show results dialog (modal)
+                            try
+                            {
+                                using (var dlg = new ClassPointAddIn.Views.Quizzes.QuizResultsForm(percentages, correctIndices))
+                                {
+                                    dlg.ShowDialog();
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Failed to show quiz results dialog: {ex.Message}");
+                            }
+
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Application_WindowSelectionChange Error: {ex.Message}");
+            }
+        }
         public void HideQuizTaskPane()
         {
             try
@@ -105,7 +191,8 @@ namespace ClassPointAddIn
                 // Hook into slideshow events
                 Application.SlideShowBegin += Application_SlideShowBegin;
                 Application.SlideShowEnd += Application_SlideShowEnd;
-
+                Application.SlideShowNextClick += Application_SlideShowNextClick; // <--- add this line
+                Application.WindowSelectionChange += Application_WindowSelectionChange;
                 // Initialize class API service
                 _classApiService = new ClassApiService();
 
@@ -116,6 +203,56 @@ namespace ClassPointAddIn
                 Debug.WriteLine($"ThisAddIn_Startup Error: {ex.Message}");
                 System.Windows.Forms.MessageBox.Show($"Add-in startup error: {ex.Message}", "Error");
             }
+        }
+        private void Application_SlideShowOnNext(
+    Microsoft.Office.Interop.PowerPoint.SlideShowWindow Wn,
+    Microsoft.Office.Interop.PowerPoint.Effect Effect)
+        {
+            try
+            {
+                // Make sure a shape was clicked
+                var clickedShape = Effect?.Shape;
+                if (clickedShape == null)
+                    return;
+
+                // Detect quiz shape by tag
+                for (int i = 1; i <= clickedShape.Tags.Count; i++)
+                {
+                    if (clickedShape.Tags.Name(i) == "QuizButton" &&
+                        clickedShape.Tags.Value(i) == "MultiChoiceQuiz")
+                    {
+                        ShowQuizResultFromTaskPane();
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"SlideShowOnNext Error: {ex.Message}");
+            }
+        }
+        private void ShowQuizResultFromTaskPane()
+        {
+            int numberOfChoices = 4;
+            List<int> correctIndices = new List<int> { 0 };
+
+            if (_quizTaskPaneControl != null)
+            {
+                numberOfChoices = _quizTaskPaneControl.GetNumberOfChoices();
+                var configured = _quizTaskPaneControl.GetCorrectAnswerIndices();
+                if (configured != null && configured.Count > 0)
+                    correctIndices = configured;
+            }
+
+            var percentages = new int[numberOfChoices];
+            var basePercent = 100 / numberOfChoices;
+            var remainder = 100 % numberOfChoices;
+
+            for (int i = 0; i < numberOfChoices; i++)
+                percentages[i] = basePercent + (i < remainder ? 1 : 0);
+
+            using (var dlg = new QuizResultsForm(percentages, correctIndices))
+                dlg.ShowDialog();
         }
 
         private void ThisAddIn_Shutdown(object sender, System.EventArgs e)
@@ -581,5 +718,80 @@ namespace ClassPointAddIn
         }
 
         #endregion
+
+        private void Application_SlideShowNextClick(Microsoft.Office.Interop.PowerPoint.SlideShowWindow Wn, Microsoft.Office.Interop.PowerPoint.Effect n)
+        {
+            try
+            {
+                if (n == null) return;
+
+                var clickedShape = n.Shape;
+                if (clickedShape == null) return;
+
+                bool isQuizButton = false;
+                try
+                {
+                    for (int i = 1; i <= clickedShape.Tags.Count; i++)
+                    {
+                        if (clickedShape.Tags.Name(i) == "QuizButton" && clickedShape.Tags.Value(i) == "MultiChoiceQuiz")
+                        {
+                            isQuizButton = true;
+                            break;
+                        }
+                    }
+                }
+                catch
+                {
+                    // ignore tag access errors
+                }
+
+                if (!isQuizButton) return;
+
+                // Prepare data from task pane if available
+                int numberOfChoices = 4;
+                List<int> correctIndices = new List<int> { 0 };
+
+                try
+                {
+                    if (_quizTaskPaneControl != null)
+                    {
+                        numberOfChoices = _quizTaskPaneControl.GetNumberOfChoices();
+                        var configuredCorrect = _quizTaskPaneControl.GetCorrectAnswerIndices();
+                        if (configuredCorrect != null && configuredCorrect.Count > 0)
+                            correctIndices = configuredCorrect;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error reading task pane settings for results dialog: {ex.Message}");
+                }
+
+                // Build sample percentages (even split) — replace with real API call if you have live data
+                var percentages = new int[numberOfChoices];
+                var basePercent = 100 / Math.Max(1, numberOfChoices);
+                var remainder = 100 % Math.Max(1, numberOfChoices);
+                for (int i = 0; i < numberOfChoices; i++)
+                {
+                    percentages[i] = basePercent + (i < remainder ? 1 : 0);
+                }
+
+                try
+                {
+                    using (var dlg = new ClassPointAddIn.Views.Quizzes.QuizResultsForm(percentages, correctIndices))
+                    {
+                        // Modal dialog is appropriate in slideshow to ensure user sees results
+                        dlg.ShowDialog();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to show quiz results dialog: {ex.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Application_SlideShowNextClick Error: {ex.Message}");
+            }
+        }
     }
 }

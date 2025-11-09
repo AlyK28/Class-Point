@@ -1,70 +1,64 @@
 ﻿using ClassPointAddIn.Api.Services.QuizService;
-using Microsoft.Office.Interop.PowerPoint;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
 using System.Windows.Forms;
-using Font = System.Drawing.Font;
-using Point = System.Drawing.Point;
 
 namespace ClassPointAddIn.Views.Quizzes
 {
     public partial class QuizTaskPane : UserControl
     {
         // Main sections
-        private TabControl tabContainer;
-        private TabPage tabQuizList;
-        private TabPage tabCreateQuiz;
-
-        // Quiz List Tab
         private Panel pnlHeader;
         private Label lblTitle;
-        private Button btnRefresh;
-        private ListBox lstQuizzes;
-        private Button btnInsertQuiz;
-        private Panel pnlQuizDetails;
-        private Label lblQuizTitle;
-        private Label lblQuizQuestion;
-        private Label lblQuizChoices;
 
-        // Create Quiz Tab
-        private PlaceholderTextBox txtTitle;
-        private PlaceholderTextBox txtQuestion;
+        // Quiz Configuration Controls
+        private Label lblQuestionType;
+        private ComboBox cmbQuestionType;
+
+        // New: question text input
+        private Label lblQuestionText;
+        private TextBox txtQuestionText;
+
+        private Label lblNumberOfChoices;
+        private Panel pnlChoiceNumbers;
+        private Button[] choiceNumberButtons;
+        private int selectedChoiceCount = 4;
+
         private CheckBox chkAllowMultiple;
+        private CheckBox chkHasCorrectAnswer;
+        private CheckedListBox clbCorrectAnswers; // Multi-select dropdown for correct answers
         private CheckBox chkCompetitionMode;
-        private CheckBox chkRandomizeOrder;
-        private NumericUpDown numPointsCorrect;
-        private NumericUpDown numPenaltyWrong;
-        private Panel pnlChoices;
-        private Button btnAddChoice;
-        private Button btnCreateQuiz;
-        private Button btnCancelCreate;
+
+        private Label lblPlayOptions;
+        private CheckBox chkStartWithSlide;
+        private CheckBox chkMinimizeResult;
+        private CheckBox chkCloseSubmission;
+
+        private NumericUpDown numCloseAfter;
+        private Label lblCloseAfterUnit;
+
+        // New: Save button
+        private Button btnSaveQuiz;
 
         private int _courseId;
-        private List<QuizResponse> _quizzes;
-        private QuizApiService _quizService;
-        private List<ChoiceControl> _choiceControls;
 
         public QuizTaskPane()
         {
-            _quizzes = new List<QuizResponse>();
-            _quizService = new QuizApiService();
-            _choiceControls = new List<ChoiceControl>();
             InitializeComponent();
         }
 
         public void SetCourseId(int courseId)
         {
             _courseId = courseId;
-            LoadQuizzes();
         }
 
         private void InitializeComponent()
         {
-            Size = new Size(350, 700);
+            Size = new Size(350, 600);
             BackColor = Color.White;
-            Padding = new Padding(5);
+            Padding = new Padding(10);
+            AutoScroll = true;
 
             CreateMainLayout();
         }
@@ -75,15 +69,15 @@ namespace ClassPointAddIn.Views.Quizzes
             pnlHeader = new Panel
             {
                 Location = new Point(0, 0),
-                Size = new Size(340, 50),
+                Size = new Size(330, 50),
                 BackColor = Color.FromArgb(0, 120, 215)
             };
 
             lblTitle = new Label
             {
-                Text = "Quiz Manager",
+                Text = "Quiz Settings",
                 Location = new Point(10, 10),
-                Size = new Size(320, 30),
+                Size = new Size(310, 30),
                 Font = new Font("Segoe UI", 14F, FontStyle.Bold),
                 ForeColor = Color.White,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -93,857 +87,542 @@ namespace ClassPointAddIn.Views.Quizzes
             pnlHeader.Controls.Add(lblTitle);
             Controls.Add(pnlHeader);
 
-            // Tab Container
-            tabContainer = new TabControl
-            {
-                Location = new Point(5, 55),
-                Size = new Size(340, 640),
-                Font = new Font("Segoe UI", 9F)
-            };
-
-            CreateQuizListTab();
-            CreateQuizCreationTab();
-
-            tabContainer.TabPages.Add(tabQuizList);
-            tabContainer.TabPages.Add(tabCreateQuiz);
-
-            Controls.Add(tabContainer);
+            CreateQuizConfiguration();
         }
 
-        #region Quiz List Tab
-
-        private void CreateQuizListTab()
+        private void CreateQuizConfiguration()
         {
-            tabQuizList = new TabPage("Quiz Library")
-            {
-                BackColor = Color.White,
-                Padding = new Padding(10)
-            };
+            var y = 60; // Start below header
 
-            var y = 10;
-
-            // Refresh Button
-            btnRefresh = new Button
+            // Question Type
+            lblQuestionType = new Label
             {
-                Text = "🔄 Refresh List",
+                Text = "Question Type",
                 Location = new Point(10, y),
-                Size = new Size(300, 30),
-                BackColor = Color.FromArgb(108, 117, 125),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9F),
-                Cursor = Cursors.Hand
-            };
-            btnRefresh.FlatAppearance.BorderSize = 0;
-            btnRefresh.Click += BtnRefresh_Click;
-            tabQuizList.Controls.Add(btnRefresh);
-
-            y += 40;
-
-            // Quiz List
-            var lblQuizList = new Label
-            {
-                Text = "Available Quizzes:",
-                Location = new Point(10, y),
-                Size = new Size(300, 20),
+                Size = new Size(320, 20),
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(68, 68, 68)
             };
-            tabQuizList.Controls.Add(lblQuizList);
+            Controls.Add(lblQuestionType);
 
             y += 25;
 
-            var pnlQuizList = new Panel
+            cmbQuestionType = new ComboBox
             {
                 Location = new Point(10, y),
-                Size = new Size(300, 200),
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Color.White
+                Size = new Size(320, 23),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Font = new Font("Segoe UI", 9F)
             };
+            cmbQuestionType.Items.AddRange(new string[] { "Multiple Choice", "True/False", "Short Answer" });
+            cmbQuestionType.SelectedIndex = 0;
+            Controls.Add(cmbQuestionType);
 
-            lstQuizzes = new ListBox
+            y += 30;
+
+            // QUESTION TEXT input (new)
+            lblQuestionText = new Label
             {
-                Dock = DockStyle.Fill,
-                DisplayMember = "Title",
-                ValueMember = "Id",
+                Text = "Question Text",
+                Location = new Point(10, y),
+                Size = new Size(320, 18),
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(68, 68, 68)
+            };
+            Controls.Add(lblQuestionText);
+
+            y += 20;
+
+            txtQuestionText = new TextBox
+            {
+                Location = new Point(10, y),
+                Size = new Size(320, 60),
+                Multiline = true,
                 Font = new Font("Segoe UI", 9F),
-                BorderStyle = BorderStyle.None
+                ScrollBars = ScrollBars.Vertical
             };
-            lstQuizzes.SelectedIndexChanged += LstQuizzes_SelectedIndexChanged;
+            Controls.Add(txtQuestionText);
 
-            pnlQuizList.Controls.Add(lstQuizzes);
-            tabQuizList.Controls.Add(pnlQuizList);
+            y += 70;
 
-            y += 210;
-
-            // Insert Quiz Button
-            btnInsertQuiz = new Button
+            // Number of choices
+            lblNumberOfChoices = new Label
             {
-                Text = "📋 Insert Quiz into Slide",
+                Text = "Number of choices",
                 Location = new Point(10, y),
-                Size = new Size(300, 40),
-                BackColor = Color.FromArgb(40, 167, 69),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                Enabled = false,
-                Cursor = Cursors.Hand
+                Size = new Size(320, 20),
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(68, 68, 68)
             };
-            btnInsertQuiz.FlatAppearance.BorderSize = 0;
-            btnInsertQuiz.Click += BtnInsertQuiz_Click;
-            tabQuizList.Controls.Add(btnInsertQuiz);
+            Controls.Add(lblNumberOfChoices);
+
+            y += 25;
+
+            CreateChoiceNumberButtons(y);
 
             y += 50;
 
-            // Quiz Preview
-            var lblDetails = new Label
-            {
-                Text = "Quiz Preview:",
-                Location = new Point(10, y),
-                Size = new Size(300, 20),
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(68, 68, 68)
-            };
-            tabQuizList.Controls.Add(lblDetails);
-
-            y += 25;
-
-            pnlQuizDetails = new Panel
-            {
-                Location = new Point(10, y),
-                Size = new Size(300, 250),
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Color.FromArgb(248, 249, 250),
-                AutoScroll = true
-            };
-
-            lblQuizTitle = new Label
-            {
-                Text = "Select a quiz to preview",
-                Location = new Point(10, 10),
-                Size = new Size(280, 20),
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(68, 68, 68),
-                BackColor = Color.Transparent
-            };
-
-            lblQuizQuestion = new Label
-            {
-                Location = new Point(10, 35),
-                Size = new Size(280, 60),
-                Font = new Font("Segoe UI", 9F),
-                ForeColor = Color.Black,
-                BackColor = Color.Transparent,
-                Text = ""
-            };
-
-            lblQuizChoices = new Label
-            {
-                Location = new Point(10, 100),
-                Size = new Size(280, 120),
-                Font = new Font("Segoe UI", 8F),
-                ForeColor = Color.FromArgb(108, 117, 125),
-                BackColor = Color.Transparent,
-                Text = ""
-            };
-
-            pnlQuizDetails.Controls.AddRange(new Control[] { lblQuizTitle, lblQuizQuestion, lblQuizChoices });
-            tabQuizList.Controls.Add(pnlQuizDetails);
-        }
-
-        #endregion
-
-        #region Quiz Creation Tab
-
-        private void CreateQuizCreationTab()
-        {
-            tabCreateQuiz = new TabPage("Create Quiz")
-            {
-                BackColor = Color.White,
-                Padding = new Padding(10),
-                AutoScroll = true
-            };
-
-            var y = 10;
-
-            // Title
-            var lblTitleLabel = new Label
-            {
-                Text = "Quiz Title:",
-                Location = new Point(10, y),
-                Size = new Size(100, 20),
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
-            };
-            txtTitle = new PlaceholderTextBox
-            {
-                Location = new Point(10, y + 25),
-                Size = new Size(300, 23),
-                Placeholder = "Enter quiz title..."
-            };
-            tabCreateQuiz.Controls.AddRange(new Control[] { lblTitleLabel, txtTitle });
-
-            y += 60;
-
-            // Question
-            var lblQuestionLabel = new Label
-            {
-                Text = "Question:",
-                Location = new Point(10, y),
-                Size = new Size(100, 20),
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
-            };
-            txtQuestion = new PlaceholderTextBox
-            {
-                Location = new Point(10, y + 25),
-                Size = new Size(300, 60),
-                Multiline = true,
-                Placeholder = "Enter your question..."
-            };
-            tabCreateQuiz.Controls.AddRange(new Control[] { lblQuestionLabel, txtQuestion });
-
-            y += 100;
-
-            // Options
+            // Checkboxes for quiz options
             chkAllowMultiple = new CheckBox
             {
-                Text = "Allow multiple correct answers",
+                Text = "Allow selecting multiple choices",
                 Location = new Point(10, y),
-                Size = new Size(300, 20),
-                Font = new Font("Segoe UI", 8F)
+                Size = new Size(320, 20),
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = Color.FromArgb(68, 68, 68)
             };
+            Controls.Add(chkAllowMultiple);
+
+            y += 30;
+
+            // Has correct answer with multi-select dropdown
+            CreateCorrectAnswerSection(y);
+
+            // Dynamic spacing based on dropdown height
+            y += Math.Max(80, CalculateDropdownHeight(selectedChoiceCount) + 30);
 
             chkCompetitionMode = new CheckBox
             {
                 Text = "Competition mode",
-                Location = new Point(10, y + 25),
-                Size = new Size(300, 20),
-                Font = new Font("Segoe UI", 8F)
-            };
-
-            chkRandomizeOrder = new CheckBox
-            {
-                Text = "Randomize choice order",
-                Location = new Point(10, y + 50),
-                Size = new Size(300, 20),
-                Font = new Font("Segoe UI", 8F)
-            };
-
-            tabCreateQuiz.Controls.AddRange(new Control[] { chkAllowMultiple, chkCompetitionMode, chkRandomizeOrder });
-
-            y += 85;
-
-            // Scoring
-            var lblPoints = new Label
-            {
-                Text = "Points per correct:",
                 Location = new Point(10, y),
-                Size = new Size(120, 20),
+                Size = new Size(320, 20),
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = Color.FromArgb(68, 68, 68)
+            };
+            Controls.Add(chkCompetitionMode);
+
+            y += 50;
+
+            // Play Options section
+            lblPlayOptions = new Label
+            {
+                Text = "Play Options",
+                Location = new Point(10, y),
+                Size = new Size(320, 20),
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(68, 68, 68)
+            };
+            Controls.Add(lblPlayOptions);
+
+            y += 30;
+
+            chkStartWithSlide = new CheckBox
+            {
+                Text = "Start question with slide",
+                Location = new Point(10, y),
+                Size = new Size(320, 20),
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = Color.FromArgb(68, 68, 68)
+            };
+            Controls.Add(chkStartWithSlide);
+
+            y += 30;
+
+            chkMinimizeResult = new CheckBox
+            {
+                Text = "Minimize result window after question starts",
+                Location = new Point(10, y),
+                Size = new Size(320, 20),
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = Color.FromArgb(68, 68, 68)
+            };
+            Controls.Add(chkMinimizeResult);
+
+            y += 30;
+
+            // Close submission option with time input
+            var pnlCloseSubmission = new Panel
+            {
+                Location = new Point(10, y),
+                Size = new Size(320, 25),
+                BackColor = Color.Transparent
+            };
+
+            chkCloseSubmission = new CheckBox
+            {
+                Text = "Close submission after",
+                Location = new Point(0, 2),
+                Size = new Size(140, 20),
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = Color.FromArgb(68, 68, 68)
+            };
+
+            numCloseAfter = new NumericUpDown
+            {
+                Location = new Point(145, 0),
+                Size = new Size(50, 23),
+                Minimum = 1,
+                Maximum = 60,
+                Value = 1,
                 Font = new Font("Segoe UI", 9F)
             };
-            numPointsCorrect = new NumericUpDown
+
+            lblCloseAfterUnit = new Label
             {
-                Location = new Point(140, y),
-                Size = new Size(60, 23),
-                Minimum = 0,
-                Maximum = 100,
-                Value = 1
+                Text = "minute",
+                Location = new Point(200, 2),
+                Size = new Size(50, 20),
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = Color.FromArgb(68, 68, 68)
             };
 
-            var lblPenalty = new Label
-            {
-                Text = "Penalty per wrong:",
-                Location = new Point(10, y + 30),
-                Size = new Size(120, 20),
-                Font = new Font("Segoe UI", 9F)
-            };
-            numPenaltyWrong = new NumericUpDown
-            {
-                Location = new Point(140, y + 30),
-                Size = new Size(60, 23),
-                Minimum = 0,
-                Maximum = 100,
-                Value = 0
-            };
-
-            tabCreateQuiz.Controls.AddRange(new Control[] { lblPoints, numPointsCorrect, lblPenalty, numPenaltyWrong });
-
-            y += 70;
-
-            // Choices section
-            var lblChoicesLabel = new Label
-            {
-                Text = "Answer Choices:",
-                Location = new Point(10, y),
-                Size = new Size(150, 20),
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
-            };
-            tabCreateQuiz.Controls.Add(lblChoicesLabel);
-
-            y += 25;
-
-            pnlChoices = new Panel
-            {
-                Location = new Point(10, y),
-                Size = new Size(300, 200),
-                BorderStyle = BorderStyle.FixedSingle,
-                AutoScroll = true,
-                BackColor = Color.White
-            };
-            tabCreateQuiz.Controls.Add(pnlChoices);
-
-            y += 210;
-
-            btnAddChoice = new Button
-            {
-                Text = "➕ Add Choice",
-                Location = new Point(10, y),
-                Size = new Size(100, 30),
-                BackColor = Color.FromArgb(108, 117, 125),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 8F)
-            };
-            btnAddChoice.FlatAppearance.BorderSize = 0;
-            btnAddChoice.Click += BtnAddChoice_Click;
-            tabCreateQuiz.Controls.Add(btnAddChoice);
+            pnlCloseSubmission.Controls.AddRange(new Control[] { chkCloseSubmission, numCloseAfter, lblCloseAfterUnit });
+            Controls.Add(pnlCloseSubmission);
 
             y += 40;
 
-            // Action buttons
-            btnCreateQuiz = new Button
+            // SAVE button (new)
+            btnSaveQuiz = new Button
             {
-                Text = "✅ Create Quiz",
+                Text = "Save Quiz",
                 Location = new Point(10, y),
-                Size = new Size(140, 35),
-                BackColor = Color.FromArgb(40, 167, 69),
+                Size = new Size(320, 36),
+                BackColor = Color.FromArgb(0, 120, 215),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
+                Cursor = Cursors.Hand
             };
-            btnCreateQuiz.FlatAppearance.BorderSize = 0;
-            btnCreateQuiz.Click += BtnCreateQuiz_Click;
+            btnSaveQuiz.FlatAppearance.BorderSize = 0;
+            btnSaveQuiz.Click += BtnSaveQuiz_Click;
+            Controls.Add(btnSaveQuiz);
+        }
 
-            btnCancelCreate = new Button
+        private void CreateCorrectAnswerSection(int yPosition)
+        {
+            chkHasCorrectAnswer = new CheckBox
             {
-                Text = "❌ Clear Form",
-                Location = new Point(160, y),
-                Size = new Size(100, 35),
-                BackColor = Color.FromArgb(220, 53, 69),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9F)
+                Text = "Has correct answer(s)",
+                Location = new Point(10, yPosition),
+                Size = new Size(160, 20),
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = Color.FromArgb(68, 68, 68),
+                Checked = true
             };
-            btnCancelCreate.FlatAppearance.BorderSize = 0;
-            btnCancelCreate.Click += BtnCancelCreate_Click;
+            chkHasCorrectAnswer.CheckedChanged += ChkHasCorrectAnswer_CheckedChanged;
+            Controls.Add(chkHasCorrectAnswer);
 
-            tabCreateQuiz.Controls.AddRange(new Control[] { btnCreateQuiz, btnCancelCreate });
+            // Multi-select dropdown for correct answers
+            clbCorrectAnswers = new CheckedListBox
+            {
+                Location = new Point(175, yPosition - 2),
+                Size = new Size(155, CalculateDropdownHeight(selectedChoiceCount)), // Dynamic height
+                Font = new Font("Segoe UI", 8F),
+                CheckOnClick = true,
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = Color.White,
+                IntegralHeight = false // Allows custom height
+            };
 
-            // Add default choices
-            AddDefaultChoices();
+            // Initialize with default 4 choices
+            UpdateCorrectAnswerChoices();
+            Controls.Add(clbCorrectAnswers);
         }
 
-        private void AddDefaultChoices()
+        // Helper method to calculate the appropriate height for the dropdown
+        private int CalculateDropdownHeight(int choiceCount)
         {
-            // Add 3 default choices
-            for (int i = 0; i < 3; i++)
+            // Each item is approximately 16 pixels high, plus some padding
+            var itemHeight = 16;
+            var padding = 4;
+            var minHeight = 20; // Minimum height
+            var maxHeight = 120; // Maximum height to prevent it from getting too large
+
+            var calculatedHeight = (choiceCount * itemHeight) + padding;
+
+            // Ensure height is within reasonable bounds
+            if (calculatedHeight < minHeight)
+                calculatedHeight = minHeight;
+            else if (calculatedHeight > maxHeight)
+                calculatedHeight = maxHeight;
+
+            return calculatedHeight;
+        }
+        private void ChkHasCorrectAnswer_CheckedChanged(object sender, EventArgs e)
+        {
+            // Enable/disable the correct answers dropdown based on checkbox
+            clbCorrectAnswers.Enabled = chkHasCorrectAnswer.Checked;
+
+            if (!chkHasCorrectAnswer.Checked)
             {
-                AddChoice($"Choice {i + 1}", false);
+                // Uncheck all items when disabled
+                for (int i = 0; i < clbCorrectAnswers.Items.Count; i++)
+                {
+                    clbCorrectAnswers.SetItemChecked(i, false);
+                }
             }
         }
 
-        private void BtnAddChoice_Click(object sender, EventArgs e)
+        private void UpdateCorrectAnswerChoices()
         {
-            AddChoice("", false);
-        }
-
-        private void AddChoice(string text, bool isCorrect)
-        {
-            var choiceControl = new ChoiceControl(text, isCorrect, _choiceControls.Count + 1);
-            choiceControl.Location = new Point(5, _choiceControls.Count * 35 + 5);
-            choiceControl.Size = new Size(280, 30);
-            choiceControl.RemoveRequested += (s, e) => RemoveChoice(choiceControl);
-
-            _choiceControls.Add(choiceControl);
-            pnlChoices.Controls.Add(choiceControl);
-
-            UpdateRemoveButtons();
-        }
-
-        private void RemoveChoice(ChoiceControl choiceControl)
-        {
-            if (_choiceControls.Count <= 2) return;
-
-            _choiceControls.Remove(choiceControl);
-            pnlChoices.Controls.Remove(choiceControl);
-
-            // Reposition remaining choices
-            for (int i = 0; i < _choiceControls.Count; i++)
+            if (clbCorrectAnswers == null) return;
+            //hello
+            // Store currently selected items
+            var selectedItems = new List<string>();
+            for (int i = 0; i < clbCorrectAnswers.CheckedItems.Count; i++)
             {
-                _choiceControls[i].Location = new Point(5, i * 35 + 5);
-                _choiceControls[i].UpdateNumber(i + 1);
+                selectedItems.Add(clbCorrectAnswers.CheckedItems[i].ToString());
             }
 
-            UpdateRemoveButtons();
-        }
+            // Clear and repopulate based on selected choice count
+            clbCorrectAnswers.Items.Clear();
 
-        private void UpdateRemoveButtons()
-        {
-            bool canRemove = _choiceControls.Count > 2;
-            foreach (var choice in _choiceControls)
+            for (int i = 0; i < selectedChoiceCount; i++)
             {
-                choice.CanRemove = canRemove;
+                var choiceLabel = $"Choice {(char)('A' + i)}";
+                clbCorrectAnswers.Items.Add(choiceLabel);
+
+                // Restore selection if it was previously selected
+                if (selectedItems.Contains(choiceLabel))
+                {
+                    clbCorrectAnswers.SetItemChecked(i, true);
+                }
+            }
+
+            // If no items are checked and "Has correct answer" is enabled, check the first one by default
+            if (chkHasCorrectAnswer.Checked && clbCorrectAnswers.CheckedItems.Count == 0 && clbCorrectAnswers.Items.Count > 0)
+            {
+                clbCorrectAnswers.SetItemChecked(0, true);
             }
         }
 
-        private async void BtnCreateQuiz_Click(object sender, EventArgs e)
+        private void CreateChoiceNumberButtons(int yPosition)
+        {
+            pnlChoiceNumbers = new Panel
+            {
+                Location = new Point(10, yPosition),
+                Size = new Size(320, 35),
+                BackColor = Color.Transparent
+            };
+
+            choiceNumberButtons = new Button[5]; // 2, 3, 4, 5, 6
+
+            for (int i = 0; i < 5; i++)
+            {
+                var choiceNumber = i + 2; // Start from 2
+                var button = new Button
+                {
+                    Text = choiceNumber.ToString(),
+                    Location = new Point(i * 50, 5),
+                    Size = new Size(40, 30),
+                    Font = new Font("Segoe UI", 9F),
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = choiceNumber == 4 ? Color.FromArgb(0, 120, 215) : Color.FromArgb(240, 240, 240),
+                    ForeColor = choiceNumber == 4 ? Color.White : Color.Black,
+                    Cursor = Cursors.Hand,
+                    Tag = choiceNumber
+                };
+
+                button.FlatAppearance.BorderSize = 1;
+                button.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+                button.Click += ChoiceNumberButton_Click;
+
+                choiceNumberButtons[i] = button;
+                pnlChoiceNumbers.Controls.Add(button);
+            }
+
+            Controls.Add(pnlChoiceNumbers);
+        }
+
+        private void ChoiceNumberButton_Click(object sender, EventArgs e)
+        {
+            var clickedButton = sender as Button;
+            var newChoiceCount = (int)clickedButton.Tag;
+
+            // Update selected choice count
+            selectedChoiceCount = newChoiceCount;
+
+            // Update button appearances
+            foreach (var button in choiceNumberButtons)
+            {
+                var choiceNumber = (int)button.Tag;
+                if (choiceNumber == selectedChoiceCount)
+                {
+                    button.BackColor = Color.FromArgb(0, 120, 215);
+                    button.ForeColor = Color.White;
+                }
+                else
+                {
+                    button.BackColor = Color.FromArgb(240, 240, 240);
+                    button.ForeColor = Color.Black;
+                }
+            }
+
+            // Update the correct answer choices dropdown
+            UpdateCorrectAnswerChoices();
+
+            System.Diagnostics.Debug.WriteLine($"Selected choice count: {selectedChoiceCount}");
+        }
+
+        // Public methods to get current settings
+        public string GetQuestionType()
+        {
+            return cmbQuestionType.SelectedItem?.ToString() ?? "Multiple Choice";
+        }
+
+        public int GetNumberOfChoices()
+        {
+            return selectedChoiceCount;
+        }
+
+        public bool GetAllowMultipleChoices()
+        {
+            return chkAllowMultiple.Checked;
+        }
+
+        public bool GetHasCorrectAnswer()
+        {
+            return chkHasCorrectAnswer.Checked;
+        }
+
+        public List<int> GetCorrectAnswerIndices()
+        {
+            var correctIndices = new List<int>();
+            if (chkHasCorrectAnswer.Checked)
+            {
+                for (int i = 0; i < clbCorrectAnswers.CheckedItems.Count; i++)
+                {
+                    var checkedItem = clbCorrectAnswers.CheckedItems[i].ToString();
+                    var index = clbCorrectAnswers.Items.IndexOf(checkedItem);
+                    if (index >= 0)
+                    {
+                        correctIndices.Add(index);
+                    }
+                }
+            }
+            return correctIndices;
+        }
+
+        public List<string> GetCorrectAnswerChoices()
+        {
+            var correctChoices = new List<string>();
+            if (chkHasCorrectAnswer.Checked)
+            {
+                foreach (var item in clbCorrectAnswers.CheckedItems)
+                {
+                    correctChoices.Add(item.ToString());
+                }
+            }
+            return correctChoices;
+        }
+
+        public bool GetCompetitionMode()
+        {
+            return chkCompetitionMode.Checked;
+        }
+
+        public bool GetStartWithSlide()
+        {
+            return chkStartWithSlide.Checked;
+        }
+
+        public bool GetMinimizeResult()
+        {
+            return chkMinimizeResult.Checked;
+        }
+
+        public bool GetCloseSubmissionEnabled()
+        {
+            return chkCloseSubmission.Checked;
+        }
+
+        public int GetCloseSubmissionTime()
+        {
+            return (int)numCloseAfter.Value;
+        }
+
+        // Method to apply settings to a quiz (can be called when creating or updating quiz)
+        public void ApplySettingsToQuiz()
+        {
+            var settings = new
+            {
+                QuestionType = GetQuestionType(),
+                NumberOfChoices = GetNumberOfChoices(),
+                AllowMultipleChoices = GetAllowMultipleChoices(),
+                HasCorrectAnswer = GetHasCorrectAnswer(),
+                CorrectAnswerIndices = GetCorrectAnswerIndices(),
+                CorrectAnswerChoices = GetCorrectAnswerChoices(),
+                CompetitionMode = GetCompetitionMode(),
+                StartWithSlide = GetStartWithSlide(),
+                MinimizeResult = GetMinimizeResult(),
+                CloseSubmissionEnabled = GetCloseSubmissionEnabled(),
+                CloseSubmissionTime = GetCloseSubmissionTime()
+            };
+
+            System.Diagnostics.Debug.WriteLine($"Quiz Settings Applied: {settings}");
+
+            // Here you can integrate with your quiz creation logic
+            // For example, call a method on the selected quiz button in the slide
+            // or store these settings for when a quiz is actually created
+        }
+
+        // Save button handler - sends POST to QuizApiService
+        private async void BtnSaveQuiz_Click(object sender, EventArgs e)
         {
             try
             {
-                if (!ValidateInput()) return;
+                if (_courseId <= 0)
+                {
+                    MessageBox.Show("Course ID not set. Ensure a course is created/selected before saving the quiz.", "Missing Course", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
 
-                btnCreateQuiz.Enabled = false;
-                btnCreateQuiz.Text = "Creating...";
+                var svc = new QuizApiService();
 
                 var request = new CreateMultipleChoiceQuizRequest
                 {
                     Course = _courseId,
-                    Title = txtTitle.Text.Trim(),
+                    Title = string.IsNullOrWhiteSpace(txtQuestionText?.Text) ? "Untitled Quiz" : txtQuestionText.Text,
                     Properties = new QuizProperties
                     {
-                        QuestionText = txtQuestion.Text.Trim(),
+                        NumberOfChoices = selectedChoiceCount,
                         AllowMultipleChoices = chkAllowMultiple.Checked,
+                        HasCorrectAnswer = chkHasCorrectAnswer.Checked,
                         CompetitionMode = chkCompetitionMode.Checked,
-                        RandomizeChoiceOrder = chkRandomizeOrder.Checked,
-                        PointsPerCorrect = (int)numPointsCorrect.Value,
-                        PenaltyPerWrong = (int)numPenaltyWrong.Value,
-                        HasCorrectAnswer = _choiceControls.Any(c => c.IsCorrect),
-                        Choices = _choiceControls.Where(c => !string.IsNullOrWhiteSpace(c.ChoiceText))
-                                                .Select(c => new QuizChoice
-                                                {
-                                                    Text = c.ChoiceText,
-                                                    IsCorrect = c.IsCorrect
-                                                }).ToList()
+                        RandomizeChoiceOrder = false,
+                        PointsPerCorrect = 1,
+                        PenaltyPerWrong = 0
                     }
                 };
 
-                request.Properties.NumberOfChoices = request.Properties.Choices.Count;
-
-                var createdQuiz = await _quizService.CreateMultipleChoiceQuizAsync(request);
-
-                MessageBox.Show($"Quiz '{createdQuiz.Title}' created successfully!",
-                    "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-
-                ClearCreateForm();
-                LoadQuizzes();
-                tabContainer.SelectedTab = tabQuizList; // Switch back to list tab
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error creating quiz: {ex.Message}",
-                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                btnCreateQuiz.Enabled = true;
-                btnCreateQuiz.Text = "✅ Create Quiz";
-            }
-        }
-
-        private void BtnCancelCreate_Click(object sender, EventArgs e)
-        {
-            ClearCreateForm();
-        }
-
-        private void ClearCreateForm()
-        {
-            txtTitle.Text = "";
-            txtQuestion.Text = "";
-            chkAllowMultiple.Checked = false;
-            chkCompetitionMode.Checked = false;
-            chkRandomizeOrder.Checked = false;
-            numPointsCorrect.Value = 1;
-            numPenaltyWrong.Value = 0;
-
-            // Clear choices
-            _choiceControls.Clear();
-            pnlChoices.Controls.Clear();
-            AddDefaultChoices();
-        }
-
-        private bool ValidateInput()
-        {
-            if (string.IsNullOrWhiteSpace(txtTitle.Text))
-            {
-                MessageBox.Show("Please enter a quiz title.", "Validation Error");
-                txtTitle.Focus();
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(txtQuestion.Text))
-            {
-                MessageBox.Show("Please enter a question.", "Validation Error");
-                txtQuestion.Focus();
-                return false;
-            }
-
-            var validChoices = _choiceControls.Where(c => !string.IsNullOrWhiteSpace(c.ChoiceText)).ToList();
-            if (validChoices.Count < 2)
-            {
-                MessageBox.Show("Please provide at least 2 answer choices.", "Validation Error");
-                return false;
-            }
-
-            if (!validChoices.Any(c => c.IsCorrect))
-            {
-                MessageBox.Show("Please mark at least one choice as correct.", "Validation Error");
-                return false;
-            }
-
-            return true;
-        }
-
-        #endregion
-
-        #region Quiz List Functionality
-
-        private async void LoadQuizzes()
-        {
-            try
-            {
-                btnRefresh.Text = "🔄 Loading...";
-                btnRefresh.Enabled = false;
-
-                if (_courseId > 0)
+                // Build choices. If the UI doesn't have custom choice text, use default labels.
+                request.Properties.Choices = new List<QuizChoice>();
+                for (int i = 0; i < selectedChoiceCount; i++)
                 {
-                    _quizzes = await _quizService.GetQuizzesForCourseAsync(_courseId);
+                    var label = $"Choice {(char)('A' + i)}";
+                    bool isCorrect = false;
 
-                    lstQuizzes.DataSource = null;
-                    lstQuizzes.DataSource = _quizzes;
-                    lstQuizzes.DisplayMember = "Title";
-                    lstQuizzes.ValueMember = "Id";
-
-                    if (_quizzes.Count == 0)
+                    if (chkHasCorrectAnswer.Checked && clbCorrectAnswers != null)
                     {
-                        lstQuizzes.Items.Clear();
-                        lstQuizzes.Items.Add("No quizzes found");
+                        var idx = clbCorrectAnswers.Items.IndexOf(label);
+                        if (idx >= 0 && clbCorrectAnswers.GetItemChecked(idx))
+                            isCorrect = true;
                     }
+
+                    request.Properties.Choices.Add(new QuizChoice
+                    {
+                        Text = label,
+                        IsCorrect = isCorrect
+                    });
+                }
+
+                // Optional: set additional properties from UI (close time, points, etc.) if you extend the UI later.
+
+                // Send request
+                var response = await svc.CreateMultipleChoiceQuizAsync(request);
+
+                if (response != null)
+                {
+                    MessageBox.Show($"Quiz saved successfully.\nID: {response.Id}\nTitle: {response.Title}", "Quiz Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
-                    lstQuizzes.Items.Clear();
-                    lstQuizzes.Items.Add("No course selected");
+                    MessageBox.Show("Quiz saved but received no response data.", "Quiz Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
             catch (Exception ex)
             {
-                lstQuizzes.Items.Clear();
-                lstQuizzes.Items.Add($"Error: {ex.Message}");
+                MessageBox.Show($"Failed to save quiz: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            finally
-            {
-                btnRefresh.Text = "🔄 Refresh List";
-                btnRefresh.Enabled = true;
-            }
-        }
-
-        private void LstQuizzes_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            var selectedQuiz = lstQuizzes.SelectedItem as QuizResponse;
-            btnInsertQuiz.Enabled = selectedQuiz != null;
-
-            if (selectedQuiz != null)
-            {
-                UpdateQuizPreview(selectedQuiz);
-            }
-            else
-            {
-                ClearQuizPreview();
-            }
-        }
-
-        private void UpdateQuizPreview(QuizResponse quiz)
-        {
-            lblQuizTitle.Text = quiz.Title;
-            lblQuizQuestion.Text = quiz.Properties.QuestionText;
-
-            var choicesText = "Choices:\n";
-            for (int i = 0; i < quiz.Properties.Choices.Count && i < 6; i++)
-            {
-                var choice = quiz.Properties.Choices[i];
-                var prefix = choice.IsCorrect ? "✓" : "○";
-                choicesText += $"{prefix} {(char)('A' + i)}. {choice.Text}\n";
-            }
-
-            choicesText += $"\nPoints: {quiz.Properties.PointsPerCorrect}";
-            if (quiz.Properties.AllowMultipleChoices)
-                choicesText += " | Multiple answers allowed";
-
-            lblQuizChoices.Text = choicesText;
-        }
-
-        private void ClearQuizPreview()
-        {
-            lblQuizTitle.Text = "Select a quiz to preview";
-            lblQuizQuestion.Text = "";
-            lblQuizChoices.Text = "";
-        }
-
-        private void BtnRefresh_Click(object sender, EventArgs e)
-        {
-            LoadQuizzes();
-        }
-
-        private void BtnInsertQuiz_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                var selectedQuiz = lstQuizzes.SelectedItem as QuizResponse;
-                if (selectedQuiz == null) return;
-
-                InsertQuizIntoSlide(selectedQuiz);
-
-                MessageBox.Show($"Quiz '{selectedQuiz.Title}' inserted into slide!",
-                    "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error inserting quiz: {ex.Message}",
-                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void InsertQuizIntoSlide(QuizResponse quiz)
-        {
-            var application = Globals.ThisAddIn.Application;
-            var presentation = application.ActivePresentation;
-            var slide = application.ActiveWindow.View.Slide;
-
-            // Create quiz container shape
-            var containerShape = slide.Shapes.AddShape(
-                Microsoft.Office.Core.MsoAutoShapeType.msoShapeRectangle,
-                50, 100, 600, 400);
-
-            // Style the container
-            containerShape.Fill.ForeColor.RGB = ColorTranslator.ToOle(Color.FromArgb(248, 249, 250));
-            containerShape.Line.ForeColor.RGB = ColorTranslator.ToOle(Color.FromArgb(0, 120, 215));
-            containerShape.Line.Weight = 3;
-
-            // Add quiz title
-            var titleShape = slide.Shapes.AddTextbox(
-                Microsoft.Office.Core.MsoTextOrientation.msoTextOrientationHorizontal,
-                60, 110, 580, 50);
-
-            var titleText = titleShape.TextFrame.TextRange;
-            titleText.Text = quiz.Title;
-            titleText.Font.Name = "Arial";
-            titleText.Font.Size = 18;
-            titleText.Font.Bold = Microsoft.Office.Core.MsoTriState.msoTrue;
-            titleText.Font.Color.RGB = ColorTranslator.ToOle(Color.FromArgb(0, 120, 215));
-            titleText.ParagraphFormat.Alignment = PpParagraphAlignment.ppAlignCenter;
-
-            // Add question
-            var questionShape = slide.Shapes.AddTextbox(
-                Microsoft.Office.Core.MsoTextOrientation.msoTextOrientationHorizontal,
-                60, 170, 580, 60);
-
-            var questionText = questionShape.TextFrame.TextRange;
-            questionText.Text = quiz.Properties.QuestionText;
-            questionText.Font.Name = "Arial";
-            questionText.Font.Size = 14;
-            questionText.Font.Color.RGB = ColorTranslator.ToOle(Color.Black);
-
-            // Add choices
-            var yPos = 240;
-            for (int i = 0; i < quiz.Properties.Choices.Count && i < 6; i++)
-            {
-                var choice = quiz.Properties.Choices[i];
-                var choiceShape = slide.Shapes.AddTextbox(
-                    Microsoft.Office.Core.MsoTextOrientation.msoTextOrientationHorizontal,
-                    80, yPos, 540, 30);
-
-                var choiceText = choiceShape.TextFrame.TextRange;
-                choiceText.Text = $"{(char)('A' + i)}. {choice.Text}";
-                choiceText.Font.Name = "Arial";
-                choiceText.Font.Size = 12;
-                choiceText.Font.Color.RGB = ColorTranslator.ToOle(
-                    choice.IsCorrect ? Color.FromArgb(40, 167, 69) : Color.Black);
-
-                if (choice.IsCorrect)
-                {
-                    choiceText.Font.Bold = Microsoft.Office.Core.MsoTriState.msoTrue;
-                }
-
-                yPos += 35;
-            }
-
-            // Add quiz info
-            var infoShape = slide.Shapes.AddTextbox(
-                Microsoft.Office.Core.MsoTextOrientation.msoTextOrientationHorizontal,
-                60, 460, 580, 30);
-
-            var infoText = infoShape.TextFrame.TextRange;
-            infoText.Text = $"Points: {quiz.Properties.PointsPerCorrect} | " +
-                           $"Multiple Choice: {(quiz.Properties.AllowMultipleChoices ? "Yes" : "No")} | " +
-                           $"Quiz ID: {quiz.Id}";
-            infoText.Font.Name = "Arial";
-            infoText.Font.Size = 10;
-            infoText.Font.Color.RGB = ColorTranslator.ToOle(Color.Gray);
-            infoText.ParagraphFormat.Alignment = PpParagraphAlignment.ppAlignCenter;
-        }
-
-        #endregion
-    }
-
-    // Custom TextBox with placeholder functionality for .NET Framework 4.8
-    public class PlaceholderTextBox : TextBox
-    {
-        private string _placeholder = "";
-        private bool _isPlaceholderMode = true;
-
-        public string Placeholder
-        {
-            get { return _placeholder; }
-            set
-            {
-                _placeholder = value;
-                if (_isPlaceholderMode)
-                {
-                    ShowPlaceholder();
-                }
-            }
-        }
-
-        public override string Text
-        {
-            get
-            {
-                return _isPlaceholderMode ? "" : base.Text;
-            }
-            set
-            {
-                if (string.IsNullOrEmpty(value))
-                {
-                    ShowPlaceholder();
-                }
-                else
-                {
-                    HidePlaceholder();
-                    base.Text = value;
-                }
-            }
-        }
-
-        protected override void OnEnter(EventArgs e)
-        {
-            if (_isPlaceholderMode)
-            {
-                HidePlaceholder();
-            }
-            base.OnEnter(e);
-        }
-
-        protected override void OnLeave(EventArgs e)
-        {
-            if (string.IsNullOrEmpty(base.Text))
-            {
-                ShowPlaceholder();
-            }
-            base.OnLeave(e);
-        }
-
-        private void ShowPlaceholder()
-        {
-            _isPlaceholderMode = true;
-            base.Text = _placeholder;
-            ForeColor = Color.Gray;
-            Font = new Font(Font, FontStyle.Italic);
-        }
-
-        private void HidePlaceholder()
-        {
-            _isPlaceholderMode = false;
-            base.Text = "";
-            ForeColor = SystemColors.WindowText;
-            Font = new Font(Font, FontStyle.Regular);
-        }
-
-        protected override void OnTextChanged(EventArgs e)
-        {
-            if (!_isPlaceholderMode)
-            {
-                base.OnTextChanged(e);
-            }
-        }
-    }
-
-    // Helper control for individual choices (updated for .NET Framework 4.8)
-    public partial class ChoiceControl : UserControl
-    {
-        private CheckBox chkCorrect;
-        private PlaceholderTextBox txtChoice;
-        private Button btnRemove;
-        private Label lblNumber;
-
-        public string ChoiceText => txtChoice.Text.Trim();
-        public bool IsCorrect => chkCorrect.Checked;
-        public bool CanRemove { set => btnRemove.Enabled = value; }
-
-        public event EventHandler RemoveRequested;
-
-        public ChoiceControl(string text, bool isCorrect, int number)
-        {
-            InitializeComponent();
-            txtChoice.Text = text;
-            chkCorrect.Checked = isCorrect;
-            lblNumber.Text = $"{number}.";
-        }
-
-        public void UpdateNumber(int number)
-        {
-            lblNumber.Text = $"{number}.";
-        }
-
-        private void InitializeComponent()
-        {
-            Size = new Size(280, 30);
-
-            lblNumber = new Label
-            {
-                Location = new Point(0, 5),
-                Size = new Size(15, 20),
-                TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Segoe UI", 8F, FontStyle.Bold)
-            };
-
-            chkCorrect = new CheckBox
-            {
-                Location = new Point(20, 5),
-                Size = new Size(15, 20),
-                Font = new Font("Segoe UI", 7F)
-            };
-
-            txtChoice = new PlaceholderTextBox
-            {
-                Location = new Point(40, 3),
-                Size = new Size(200, 23),
-                Placeholder = "Enter choice text...",
-                Font = new Font("Segoe UI", 8F)
-            };
-
-            btnRemove = new Button
-            {
-                Text = "✕",
-                Location = new Point(250, 2),
-                Size = new Size(25, 25),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(220, 53, 69),
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI", 7F)
-            };
-            btnRemove.FlatAppearance.BorderSize = 0;
-            btnRemove.Click += (s, e) => RemoveRequested?.Invoke(this, EventArgs.Empty);
-
-            Controls.AddRange(new Control[] { lblNumber, chkCorrect, txtChoice, btnRemove });
         }
     }
 }

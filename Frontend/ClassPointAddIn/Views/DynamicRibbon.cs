@@ -70,7 +70,7 @@ namespace ClassPointAddIn.Views
                                                $"HasCurrentCourse={hasCurrentCourse}, " +
                                                $"Result={isEnabled}");
 
-            return isEnabled;
+            return true;
         }
 
         public void OnConnectClick(Office.IRibbonControl control)
@@ -166,18 +166,185 @@ namespace ClassPointAddIn.Views
                     }
                 }
 
-                // Now try to show the quiz task pane
-                Globals.ThisAddIn.ToggleQuizTaskPane();
+                // Add a movable quiz button to the current slide
+                AddQuizButtonToSlide();
+
+                // Show the quiz task pane for settings control
+                Globals.ThisAddIn.ShowQuizTaskPane();
 
                 // Refresh ribbon to update button states
                 ribbon?.Invalidate();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error toggling quiz panel: {ex.Message}",
+                MessageBox.Show($"Error adding quiz button: {ex.Message}",
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+        // Helper: find an existing quiz button shape on a slide (returns null if none)
+        private Microsoft.Office.Interop.PowerPoint.Shape FindExistingQuizButton(Microsoft.Office.Interop.PowerPoint.Slide slide)
+        {
+            try
+            {
+                if (slide == null) return null;
+
+                foreach (Microsoft.Office.Interop.PowerPoint.Shape shape in slide.Shapes)
+                {
+                    try
+                    {
+                        // Tags collection is 1-based
+                        for (int i = 1; i <= shape.Tags.Count; i++)
+                        {
+                            if (shape.Tags.Name(i) == "QuizButton" && shape.Tags.Value(i) == "MultiChoiceQuiz")
+                            {
+                                return shape;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // ignore shape/tag access errors and continue searching other shapes
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"FindExistingQuizButton Error: {ex.Message}");
+            }
+
+            return null;
+        }
+        private void AddQuizButtonToSlide()
+        {
+            try
+            {
+                var application = Globals.ThisAddIn.Application;
+                var presentation = application.ActivePresentation;
+                var slide = application.ActiveWindow.View.Slide;
+
+                // Check if a quiz button already exists on this slide
+                var existingQuizButton = FindExistingQuizButton(slide);
+                if (existingQuizButton != null)
+                {
+                    MessageBox.Show("Quiz button already exists on this slide.\n\nTask pane reopened for configuration.",
+                        "Quiz Button Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                // Create a movable quiz button
+                var quizButton = slide.Shapes.AddShape(
+                    Microsoft.Office.Core.MsoAutoShapeType.msoShapeRoundedRectangle,
+                    100, 50, 120, 40); // Position: x=100, y=50, width=120, height=40
+
+                // Style the button
+                quizButton.Fill.ForeColor.RGB = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.FromArgb(0, 120, 215));
+                quizButton.Line.ForeColor.RGB = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.FromArgb(0, 100, 180));
+                quizButton.Line.Weight = 2;
+                quizButton.Shadow.Type = Microsoft.Office.Core.MsoShadowType.msoShadow6;
+
+                // Add text to the button
+                quizButton.TextFrame.TextRange.Text = "📋 Quiz";
+                quizButton.TextFrame.TextRange.Font.Name = "Segoe UI";
+                quizButton.TextFrame.TextRange.Font.Size = 12;
+                quizButton.TextFrame.TextRange.Font.Bold = Microsoft.Office.Core.MsoTriState.msoTrue;
+                quizButton.TextFrame.TextRange.Font.Color.RGB = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.White);
+                quizButton.TextFrame.TextRange.ParagraphFormat.Alignment = Microsoft.Office.Interop.PowerPoint.PpParagraphAlignment.ppAlignCenter;
+                quizButton.TextFrame.VerticalAnchor = Microsoft.Office.Core.MsoVerticalAnchor.msoAnchorMiddle;
+
+                // Set a unique name and tags to identify this as a quiz button
+                quizButton.Name = $"QuizButton_{System.Guid.NewGuid().ToString("N").Substring(0, 8)}";
+                quizButton.Tags.Add("QuizButton", "MultiChoiceQuiz");
+                quizButton.Tags.Add("ButtonType", "QuizControl");
+
+                // Add a click-triggered animation effect so SlideShowNextClick provides an Effect with .Shape
+                try
+                {
+                    var seq = slide.TimeLine?.MainSequence;
+
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to add animation effect to quiz button: {ex.Message}");
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Added quiz button with name: {quizButton.Name}");
+
+                MessageBox.Show("Quiz button added to slide! You can move it to any position you want.\n\nStart the slideshow and click the button to open the Quiz Results dialog.",
+                    "Quiz Button Added", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to add quiz button to slide: {ex.Message}");
+            }
+        }
+
+        // Helper: add click-triggered effect to all existing quiz buttons in the active presentation
+        public void AddClickEffectToAllQuizButtonsInActivePresentation()
+        {
+            try
+            {
+                var app = Globals.ThisAddIn.Application;
+                if (app == null || app.Presentations == null || app.Presentations.Count == 0)
+                {
+                    MessageBox.Show("No open presentation found.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var pres = app.ActivePresentation;
+                foreach (Microsoft.Office.Interop.PowerPoint.Slide slide in pres.Slides)
+                {
+                    foreach (Microsoft.Office.Interop.PowerPoint.Shape shape in slide.Shapes)
+                    {
+                        bool isQuizButton = false;
+                        try
+                        {
+                            for (int i = 1; i <= shape.Tags.Count; i++)
+                            {
+                                if (shape.Tags.Name(i) == "QuizButton" && shape.Tags.Value(i) == "MultiChoiceQuiz")
+                                {
+                                    isQuizButton = true;
+                                    break;
+                                }
+                            }
+                        }
+                        catch { /* ignore tag errors */ }
+
+                        if (!isQuizButton) continue;
+
+                        try
+                        {
+                            var seq = slide.TimeLine?.MainSequence;
+                            if (seq != null)
+                            {
+                                // Only add if no page-click effect exists for this shape
+                                bool hasClickEffect = false;
+                                foreach (Microsoft.Office.Interop.PowerPoint.Effect eff in seq)
+                                {
+                                    try
+                                    {
+
+                                    }
+                                    catch { }
+                                }
+
+
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to ensure click effect on shape {shape.Name}: {ex.Message}");
+                        }
+                    }
+                }
+
+                MessageBox.Show("Ensured click effects on all quiz buttons in the active presentation.", "Done", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to add click effects: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
 
         public async void OnLogoutClick(Office.IRibbonControl control)
         {

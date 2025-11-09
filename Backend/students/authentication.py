@@ -19,13 +19,16 @@ class StudentToken:
     @staticmethod
     def generate_token(student_id, class_id, enrollment_id):
         """Generate a JWT token for a student in a specific class."""
+        now = timezone.now()
+        expiry = now + timedelta(hours=24)
+        
         payload = {
             'student_id': student_id,
             'class_id': class_id,
             'enrollment_id': enrollment_id,
             'token_type': 'student',
-            'exp': timezone.now() + timedelta(hours=24),  # 24 hour expiry
-            'iat': timezone.now(),
+            'exp': int(expiry.timestamp()),  # Convert to unix timestamp
+            'iat': int(now.timestamp()),     # Convert to unix timestamp
             'jti': str(uuid.uuid4())  # Unique token ID
         }
         
